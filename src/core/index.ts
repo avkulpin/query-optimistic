@@ -24,3 +24,7 @@ export type {
   RegisteredPaginatedCollection,
   RegisteredEntry,
 } from './registry';
+
+// Channel for standalone optimistic mutations
+export { channel, CollectionChannel, EntityChannel } from './channel';
+export type { Channel, OptimisticTransaction } from './channel';

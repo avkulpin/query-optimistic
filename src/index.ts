@@ -4,6 +4,9 @@ export {
   defineEntity,
   defineMutation,
   registry,
+  channel,
+  CollectionChannel,
+  EntityChannel,
 } from './core';
 
 export type {
@@ -22,6 +25,8 @@ export type {
   RegisteredEntity,
   RegisteredPaginatedCollection,
   RegisteredEntry,
+  Channel,
+  OptimisticTransaction,
 } from './core';
 
 // React exports

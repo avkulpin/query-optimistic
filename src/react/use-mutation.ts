@@ -4,10 +4,14 @@ import type {
   MutationDef,
   CollectionDef,
   EntityDef,
-  OptimisticAction,
-  Optimistic,
 } from '../core/types';
 import { registry } from '../core/registry';
+import {
+  channel as coreChannel,
+  type Channel,
+  type CollectionChannel,
+  type EntityChannel,
+} from '../core/channel';
 
 /** Extract entity type from a collection or entity definition */
 type InferEntity<T> = T extends CollectionDef<infer TData, any>
@@ -89,32 +93,113 @@ export type OptimisticConfig<
   | OptimisticUpdateConfig<TTarget, TParams>
   | OptimisticDeleteConfig<TTarget, TParams>;
 
-/** Builder for prepend/append optimistic config with proper type inference */
-export function prepend<TTarget extends CollectionDef<any, any>>(
-  target: TTarget
-) {
-  return <TParams>(config: {
-    data: (params: TParams) => InferEntity<TTarget>;
-    sync?: boolean;
-  }): OptimisticPrependAppendConfig<TTarget, TParams> => ({
-    target,
-    action: 'prepend',
-    ...config,
-  });
+/** Internal transaction type for batched mutations */
+interface MutationTransaction {
+  target: CollectionDef<any, any> | EntityDef<any, any>;
+  action: 'prepend' | 'append' | 'update' | 'delete' | 'replace';
+  data?: any;
+  id?: string;
+  where?: (item: any) => boolean;
+  update?: (item: any) => any;
+  sync?: boolean;
 }
 
-/** Builder for append optimistic config with proper type inference */
-export function append<TTarget extends CollectionDef<any, any>>(
-  target: TTarget
-) {
-  return <TParams>(config: {
-    data: (params: TParams) => InferEntity<TTarget>;
-    sync?: boolean;
-  }): OptimisticPrependAppendConfig<TTarget, TParams> => ({
-    target,
-    action: 'append',
-    ...config,
-  });
+/** Internal collection channel for batched mutations */
+class BatchedCollectionChannel<TEntity> {
+  constructor(
+    private readonly target: CollectionDef<TEntity, any>,
+    private readonly transactions: MutationTransaction[]
+  ) {}
+
+  prepend(data: TEntity, options?: { sync?: boolean }): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'prepend',
+      data,
+      sync: options?.sync,
+    });
+    return this;
+  }
+
+  append(data: TEntity, options?: { sync?: boolean }): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'append',
+      data,
+      sync: options?.sync,
+    });
+    return this;
+  }
+
+  update(id: string, updateFn: (item: TEntity) => TEntity, options?: { sync?: boolean }): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'update',
+      id,
+      update: updateFn,
+      sync: options?.sync,
+    });
+    return this;
+  }
+
+  delete(id: string): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'delete',
+      id,
+    });
+    return this;
+  }
+}
+
+/** Internal entity channel for batched mutations */
+class BatchedEntityChannel<TEntity> {
+  constructor(
+    private readonly target: EntityDef<TEntity, any>,
+    private readonly transactions: MutationTransaction[]
+  ) {}
+
+  update(updateFn: (item: TEntity) => TEntity, options?: { sync?: boolean }): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'update',
+      update: updateFn,
+      sync: options?.sync,
+    });
+    return this;
+  }
+
+  replace(data: TEntity, options?: { sync?: boolean }): this {
+    this.transactions.push({
+      target: this.target,
+      action: 'replace',
+      data,
+      sync: options?.sync,
+    });
+    return this;
+  }
+}
+
+/** Internal batched channel type */
+interface BatchedChannel {
+  <TEntity>(target: CollectionDef<TEntity, any>): BatchedCollectionChannel<TEntity>;
+  <TEntity>(target: EntityDef<TEntity, any>): BatchedEntityChannel<TEntity>;
+}
+
+/** Creates a batched channel for collecting mutations */
+function createBatchedChannel(transactions: MutationTransaction[]): BatchedChannel {
+  function channel<TEntity>(target: CollectionDef<TEntity, any>): BatchedCollectionChannel<TEntity>;
+  function channel<TEntity>(target: EntityDef<TEntity, any>): BatchedEntityChannel<TEntity>;
+  function channel<TEntity>(
+    target: CollectionDef<TEntity, any> | EntityDef<TEntity, any>
+  ): BatchedCollectionChannel<TEntity> | BatchedEntityChannel<TEntity> {
+    if (target._type === 'collection') {
+      return new BatchedCollectionChannel(target, transactions);
+    } else {
+      return new BatchedEntityChannel(target, transactions);
+    }
+  }
+  return channel;
 }
 
 
@@ -170,35 +255,18 @@ export interface MutationResult<TParams, TResponse> {
 export function useMutation<
   TParams,
   TResponse,
-  TTarget extends CollectionDef<any, any> | EntityDef<any, any> = CollectionDef<any, any>,
 >(
   def: MutationDef<TParams, TResponse>,
   options?: UseMutationOptions<TParams, TResponse> & {
-    /** Optimistic update configuration */
-    optimistic?: {
-      target: TTarget;
-      action: 'prepend' | 'append' | 'update' | 'delete' | 'replace';
-      data?: (params: TParams) => InferEntity<TTarget>;
-      sync?: boolean;
-      id?: string | ((params: TParams) => string);
-      where?: (item: InferEntity<TTarget>) => boolean;
-      update?: (item: InferEntity<TTarget>, params: TParams) => InferEntity<TTarget>;
-    } | {
-      target: TTarget;
-      action: 'prepend' | 'append' | 'update' | 'delete' | 'replace';
-      data?: (params: TParams) => InferEntity<TTarget>;
-      sync?: boolean;
-      id?: string | ((params: TParams) => string);
-      where?: (item: InferEntity<TTarget>) => boolean;
-      update?: (item: InferEntity<TTarget>, params: TParams) => InferEntity<TTarget>;
-    }[];
+    /** Optimistic update configuration - receives channel and params */
+    optimistic?: (channel: BatchedChannel, params: TParams) => void;
   }
 ): MutationResult<TParams, TResponse> {
   const mutation = useTanstackMutation<
     TResponse,
     Error,
     TParams,
-    { rollbacks: (() => void)[]; optimisticId: string }
+    { rollbacks: (() => void)[]; optimisticId: string; transactions: MutationTransaction[] }
   >({
     mutationKey: def.name ? [def.name] : undefined,
     mutationFn: def.mutate,
@@ -206,43 +274,32 @@ export function useMutation<
     onMutate: async (params) => {
       const rollbacks: (() => void)[] = [];
       const optimisticId = nanoid();
+      const transactions: MutationTransaction[] = [];
 
-      // Apply optimistic updates
+      // Apply optimistic updates via channel
       if (options?.optimistic) {
-        const configs = Array.isArray(options.optimistic)
-          ? options.optimistic
-          : [options.optimistic];
+        const channel = createBatchedChannel(transactions);
+        options.optimistic(channel, params);
 
-        for (const config of configs) {
-          const { target, action } = config;
+        for (const tx of transactions) {
+          const { target, action, data, id, where, update } = tx;
 
-          // Extract optional properties based on action type
-          const data = 'data' in config ? config.data : undefined;
-          const id = 'id' in config ? config.id : undefined;
-          const where = 'where' in config ? config.where : undefined;
-          const update = 'update' in config ? config.update : undefined;
-
-          // Resolve dynamic values
-          const resolvedData =
-            typeof data === 'function' ? data(params) : data;
-          const resolvedId = typeof id === 'function' ? id(params) : id;
-
-          // Add optimistic metadata
-          const optimisticData = resolvedData
+          // Add optimistic metadata to data
+          const optimisticData = data
             ? {
-                ...resolvedData,
+                ...data,
                 _optimistic: { id: optimisticId, status: 'pending' as const },
               }
             : undefined;
 
           const updateRollbacks = registry.applyUpdate(target.name, action, {
             data: optimisticData,
-            id: resolvedId,
+            id,
             where,
             update: update
-              ? (item: any) => update(item, params)
-              : resolvedData
-                ? (item: any) => ({ ...item, ...resolvedData })
+              ? (item: any) => update(item)
+              : optimisticData
+                ? (item: any) => ({ ...item, ...optimisticData })
                 : undefined,
           });
 
@@ -251,20 +308,16 @@ export function useMutation<
       }
 
       options?.onMutate?.(params);
-      return { rollbacks, optimisticId };
+      return { rollbacks, optimisticId, transactions };
     },
 
     onSuccess: (data, params, context) => {
       // If sync is enabled, replace optimistic data with server response
-      if (options?.optimistic) {
-        const configs = Array.isArray(options.optimistic)
-          ? options.optimistic
-          : [options.optimistic];
-
-        for (const config of configs) {
-          if (config.sync && data) {
+      if (context?.transactions) {
+        for (const tx of context.transactions) {
+          if (tx.sync && data) {
             // Replace optimistic item with real server data
-            registry.applyUpdate(config.target.name, 'update', {
+            registry.applyUpdate(tx.target.name, 'update', {
               where: (item: any) =>
                 item._optimistic?.id === context?.optimisticId,
               update: () => data as any,
