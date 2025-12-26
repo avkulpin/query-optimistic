@@ -20,7 +20,7 @@
   </g>
 
   <!-- Text: query-optimistic -->
-  <text x="100" y="58" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="32" font-weight="600" fill="#1a1a2e">
+  <text x="100" y="58" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="32" font-weight="600" fill="#667eea">
     query-
     <tspan fill="url(#gradient)">optimistic</tspan>
   </text>

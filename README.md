@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/avkulpin/query-optimistic/main/assets/logo.svg" alt="query-optimistic" width="400" />
+  <img src="./assets/logo.svg" alt="query-optimistic" width="400" />
 </p>
-
-<h1 align="center">query-optimistic</h1>
 
 <p align="center">
   <strong>Simple, type-safe data fetching and optimistic updates for React</strong>
