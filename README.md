@@ -1,16 +1,66 @@
-# query-optimistic
+<p align="center">
+  <img src="https://raw.githubusercontent.com/avkulpin/query-optimistic/main/assets/logo.svg" alt="query-optimistic" width="400" />
+</p>
 
-Simple, type-safe data fetching and optimistic updates for React.
+<h1 align="center">query-optimistic</h1>
 
-A lightweight wrapper around TanStack Query that provides a cleaner API for defining queries, mutations, and handling optimistic updates with full TypeScript inference.
+<p align="center">
+  <strong>Simple, type-safe data fetching and optimistic updates for React</strong>
+</p>
 
-## Features
+<p align="center">
+  <a href="https://www.npmjs.com/package/query-optimistic"><img src="https://img.shields.io/npm/v/query-optimistic.svg?style=flat-square" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/query-optimistic"><img src="https://img.shields.io/npm/dm/query-optimistic.svg?style=flat-square" alt="npm downloads" /></a>
+  <a href="https://bundlephobia.com/package/query-optimistic"><img src="https://img.shields.io/bundlephobia/minzip/query-optimistic?style=flat-square" alt="bundle size" /></a>
+  <a href="https://github.com/avkulpin/query-optimistic/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/query-optimistic.svg?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/avkulpin/query-optimistic"><img src="https://img.shields.io/badge/TypeScript-Ready-blue?style=flat-square" alt="TypeScript" /></a>
+</p>
 
-- **Type-safe definitions** - Define queries and mutations once, get full type inference everywhere
-- **Simplified optimistic updates** - Imperative channel API for intuitive UI updates
-- **Automatic rollback** - Failed mutations automatically revert optimistic changes
-- **Multiple query sync** - Update multiple queries/entities in a single mutation
-- **Framework agnostic core** - Core utilities work without React
+<p align="center">
+  A lightweight wrapper around <a href="https://tanstack.com/query">TanStack Query</a> that provides a cleaner API for defining queries, mutations, and handling optimistic updates with full TypeScript inference.
+</p>
+
+---
+
+## Why query-optimistic?
+
+TanStack Query is powerful but optimistic updates can get complex fast. This library gives you:
+
+| Feature | TanStack Query | query-optimistic |
+|---------|---------------|------------------|
+| Define data sources | Inline in each component | Once, reuse everywhere |
+| Optimistic updates | Manual cache manipulation | Intuitive channel API |
+| Type safety | Manual type annotations | Automatic inference |
+| Multi-query updates | Complex cache logic | Simple method chaining |
+| Rollback on error | Manual implementation | Automatic |
+
+```tsx
+// Before: TanStack Query optimistic update
+useMutation({
+  mutationFn: createTodo,
+  onMutate: async (newTodo) => {
+    await queryClient.cancelQueries({ queryKey: ['todos'] })
+    const previous = queryClient.getQueryData(['todos'])
+    queryClient.setQueryData(['todos'], (old) => [...old, newTodo])
+    return { previous }
+  },
+  onError: (err, newTodo, context) => {
+    queryClient.setQueryData(['todos'], context.previous)
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: ['todos'] })
+  }
+})
+
+// After: query-optimistic
+useMutation(createTodo, {
+  optimistic: (channel, todo) => {
+    channel(todosCollection).append(todo, { sync: true })
+  }
+})
+```
+
+---
 
 ## Installation
 
@@ -18,217 +68,695 @@ A lightweight wrapper around TanStack Query that provides a cleaner API for defi
 npm install query-optimistic @tanstack/react-query
 ```
 
+```bash
+yarn add query-optimistic @tanstack/react-query
+```
+
+```bash
+pnpm add query-optimistic @tanstack/react-query
+```
+
+---
+
 ## Quick Start
 
+### 1. Define your data sources
+
 ```typescript
-import { defineCollection, defineMutation, useQuery, useMutation } from 'query-toolkit'
+import { defineCollection, defineEntity, defineMutation } from 'query-optimistic'
 
-// Define a collection
-const usersCollection = defineCollection({
-  name: 'users',
-  id: (user) => user.id,
-  fetch: () => api.get('/users')
+// A collection is an array of items
+const todosCollection = defineCollection({
+  name: 'todos',
+  id: (todo) => todo.id,
+  fetch: () => api.get('/todos')
 })
 
-// Define a mutation
-const createUser = defineMutation({
-  mutate: (params: { name: string }) => api.post('/users', params)
+// An entity is a single item
+const userEntity = defineEntity({
+  name: 'currentUser',
+  fetch: () => api.get('/me')
 })
 
-// Use in components
-function UserList() {
-  const [users, { isLoading }] = useQuery(usersCollection)
+// Define mutations separately
+const createTodo = defineMutation({
+  mutate: (params: { title: string }) => api.post('/todos', params)
+})
+```
 
-  const { mutate } = useMutation(createUser, {
+### 2. Use in components
+
+```tsx
+import { useQuery, useMutation } from 'query-optimistic'
+
+function TodoApp() {
+  const [todos, { isLoading }] = useQuery(todosCollection)
+  const [user] = useQuery(userEntity)
+
+  const { mutate: addTodo, isPending } = useMutation(createTodo, {
     optimistic: (channel, params) => {
-      channel(usersCollection).prepend({
-        id: 'temp-' + Date.now(),
-        name: params.name,
+      channel(todosCollection).append({
+        id: `temp-${Date.now()}`,
+        title: params.title,
+        completed: false,
       }, { sync: true })
     }
   })
 
+  if (isLoading) return <div>Loading...</div>
+
   return (
     <div>
-      <button onClick={() => mutate({ name: 'New User' })}>Add User</button>
-      {users?.map(user => <div key={user.id}>{user.name}</div>)}
+      <h1>Welcome, {user?.name}</h1>
+      <button
+        onClick={() => addTodo({ title: 'New task' })}
+        disabled={isPending}
+      >
+        Add Todo
+      </button>
+      <ul>
+        {todos?.map(todo => (
+          <li key={todo.id}>{todo.title}</li>
+        ))}
+      </ul>
     </div>
   )
 }
 ```
 
-## Defining Data Sources
+---
 
-### Collections (Arrays)
+## Examples
 
-```typescript
-interface User {
+### Todo List with CRUD Operations
+
+A complete todo list with create, update, toggle, and delete operations:
+
+```tsx
+import { defineCollection, defineMutation, useQuery, useMutation } from 'query-optimistic'
+
+interface Todo {
   id: string
-  name: string
-  email: string
+  title: string
+  completed: boolean
+  createdAt: string
 }
 
-const usersCollection = defineCollection<User, { page?: number }>({
-  name: 'users',
-  id: (user) => user.id,  // Required: how to identify items
-  fetch: ({ page = 1 }) => api.get(`/users?page=${page}`)
+// Define the collection
+const todosCollection = defineCollection<Todo>({
+  name: 'todos',
+  id: (todo) => todo.id,
+  fetch: () => fetch('/api/todos').then(r => r.json())
+})
+
+// Define mutations
+const createTodo = defineMutation<{ title: string }, Todo>({
+  mutate: (params) => fetch('/api/todos', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  }).then(r => r.json())
+})
+
+const toggleTodo = defineMutation<{ id: string; completed: boolean }, Todo>({
+  mutate: ({ id, completed }) => fetch(`/api/todos/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ completed })
+  }).then(r => r.json())
+})
+
+const deleteTodo = defineMutation<{ id: string }, void>({
+  mutate: ({ id }) => fetch(`/api/todos/${id}`, { method: 'DELETE' })
+})
+
+// Component
+function TodoList() {
+  const [todos, { isLoading }] = useQuery(todosCollection)
+
+  const { mutate: create } = useMutation(createTodo, {
+    optimistic: (channel, params) => {
+      channel(todosCollection).append({
+        id: `temp-${Date.now()}`,
+        title: params.title,
+        completed: false,
+        createdAt: new Date().toISOString()
+      }, { sync: true })
+    }
+  })
+
+  const { mutate: toggle } = useMutation(toggleTodo, {
+    optimistic: (channel, params) => {
+      channel(todosCollection).update(params.id, todo => ({
+        ...todo,
+        completed: params.completed
+      }))
+    }
+  })
+
+  const { mutate: remove } = useMutation(deleteTodo, {
+    optimistic: (channel, params) => {
+      channel(todosCollection).delete(params.id)
+    }
+  })
+
+  return (
+    <div>
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        const input = e.currentTarget.elements.namedItem('title') as HTMLInputElement
+        create({ title: input.value })
+        input.value = ''
+      }}>
+        <input name="title" placeholder="What needs to be done?" />
+        <button type="submit">Add</button>
+      </form>
+
+      <ul>
+        {todos?.map(todo => (
+          <li
+            key={todo.id}
+            style={{ opacity: todo._optimistic?.status === 'pending' ? 0.6 : 1 }}
+          >
+            <input
+              type="checkbox"
+              checked={todo.completed}
+              onChange={() => toggle({ id: todo.id, completed: !todo.completed })}
+            />
+            <span style={{ textDecoration: todo.completed ? 'line-through' : 'none' }}>
+              {todo.title}
+            </span>
+            <button onClick={() => remove({ id: todo.id })}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+---
+
+### Shopping Cart
+
+Real-time cart updates with quantity management:
+
+```tsx
+interface CartItem {
+  id: string
+  productId: string
+  name: string
+  price: number
+  quantity: number
+}
+
+interface CartSummary {
+  itemCount: number
+  total: number
+}
+
+const cartCollection = defineCollection<CartItem>({
+  name: 'cart',
+  id: (item) => item.id,
+  fetch: () => api.get('/cart/items')
+})
+
+const cartSummaryEntity = defineEntity<CartSummary>({
+  name: 'cartSummary',
+  fetch: () => api.get('/cart/summary')
+})
+
+const updateQuantity = defineMutation<{ id: string; quantity: number }, CartItem>({
+  mutate: ({ id, quantity }) => api.patch(`/cart/items/${id}`, { quantity })
+})
+
+const removeFromCart = defineMutation<{ id: string }, void>({
+  mutate: ({ id }) => api.delete(`/cart/items/${id}`)
+})
+
+function Cart() {
+  const [items] = useQuery(cartCollection)
+  const [summary] = useQuery(cartSummaryEntity)
+
+  const { mutate: updateQty } = useMutation(updateQuantity, {
+    optimistic: (channel, params) => {
+      // Update the item quantity
+      channel(cartCollection).update(params.id, item => ({
+        ...item,
+        quantity: params.quantity
+      }))
+
+      // Update the summary
+      channel(cartSummaryEntity).update(s => {
+        const item = items?.find(i => i.id === params.id)
+        const diff = params.quantity - (item?.quantity ?? 0)
+        return {
+          itemCount: s.itemCount + diff,
+          total: s.total + (item?.price ?? 0) * diff
+        }
+      })
+    }
+  })
+
+  const { mutate: remove } = useMutation(removeFromCart, {
+    optimistic: (channel, params) => {
+      const item = items?.find(i => i.id === params.id)
+
+      channel(cartCollection).delete(params.id)
+
+      channel(cartSummaryEntity).update(s => ({
+        itemCount: s.itemCount - (item?.quantity ?? 0),
+        total: s.total - (item?.price ?? 0) * (item?.quantity ?? 0)
+      }))
+    }
+  })
+
+  return (
+    <div>
+      <h2>Cart ({summary?.itemCount} items)</h2>
+      {items?.map(item => (
+        <div key={item.id}>
+          <span>{item.name}</span>
+          <select
+            value={item.quantity}
+            onChange={(e) => updateQty({ id: item.id, quantity: +e.target.value })}
+          >
+            {[1, 2, 3, 4, 5].map(n => <option key={n}>{n}</option>)}
+          </select>
+          <span>${(item.price * item.quantity).toFixed(2)}</span>
+          <button onClick={() => remove({ id: item.id })}>Remove</button>
+        </div>
+      ))}
+      <div><strong>Total: ${summary?.total.toFixed(2)}</strong></div>
+    </div>
+  )
+}
+```
+
+---
+
+### Social Media Feed with Likes
+
+Instant feedback for user interactions:
+
+```tsx
+interface Post {
+  id: string
+  author: { name: string; avatar: string }
+  content: string
+  likes: number
+  likedByMe: boolean
+  createdAt: string
+}
+
+const feedCollection = defineCollection<Post, { page?: number }>({
+  name: 'feed',
+  id: (post) => post.id,
+  fetch: ({ page = 1 }) => api.get(`/feed?page=${page}`)
+})
+
+const likePost = defineMutation<{ postId: string }, void>({
+  mutate: ({ postId }) => api.post(`/posts/${postId}/like`)
+})
+
+const unlikePost = defineMutation<{ postId: string }, void>({
+  mutate: ({ postId }) => api.delete(`/posts/${postId}/like`)
+})
+
+function Feed() {
+  const [posts, query, pagination] = useQuery(feedCollection, {
+    paginated: true,
+    getPageParams: ({ pageParam = 1 }) => ({ page: pageParam })
+  })
+
+  const { mutate: like } = useMutation(likePost, {
+    optimistic: (channel, params) => {
+      channel(feedCollection).update(params.postId, post => ({
+        ...post,
+        likes: post.likes + 1,
+        likedByMe: true
+      }))
+    }
+  })
+
+  const { mutate: unlike } = useMutation(unlikePost, {
+    optimistic: (channel, params) => {
+      channel(feedCollection).update(params.postId, post => ({
+        ...post,
+        likes: post.likes - 1,
+        likedByMe: false
+      }))
+    }
+  })
+
+  return (
+    <div>
+      {posts?.map(post => (
+        <article key={post.id}>
+          <header>
+            <img src={post.author.avatar} alt={post.author.name} />
+            <span>{post.author.name}</span>
+          </header>
+          <p>{post.content}</p>
+          <footer>
+            <button onClick={() =>
+              post.likedByMe
+                ? unlike({ postId: post.id })
+                : like({ postId: post.id })
+            }>
+              {post.likedByMe ? '❤️' : '🤍'} {post.likes}
+            </button>
+          </footer>
+        </article>
+      ))}
+
+      {pagination.hasNextPage && (
+        <button
+          onClick={() => pagination.fetchNextPage()}
+          disabled={pagination.isFetchingNextPage}
+        >
+          {pagination.isFetchingNextPage ? 'Loading...' : 'Load More'}
+        </button>
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+### Real-time Collaboration
+
+Update multiple users viewing the same data:
+
+```tsx
+interface Document {
+  id: string
+  title: string
+  content: string
+  lastEditedBy: string
+  updatedAt: string
+}
+
+const documentEntity = defineEntity<Document, string>({
+  name: 'document',
+  fetch: (docId) => api.get(`/documents/${docId}`)
+})
+
+const updateDocument = defineMutation<{ id: string; content: string }, Document>({
+  mutate: ({ id, content }) => api.patch(`/documents/${id}`, { content })
+})
+
+function DocumentEditor({ docId }: { docId: string }) {
+  const [doc, { isLoading }] = useQuery(documentEntity, { params: docId })
+  const [localContent, setLocalContent] = useState('')
+
+  useEffect(() => {
+    if (doc) setLocalContent(doc.content)
+  }, [doc?.content])
+
+  const { mutate: save, isPending } = useMutation(updateDocument, {
+    optimistic: (channel, params) => {
+      channel(documentEntity).update(d => ({
+        ...d,
+        content: params.content,
+        updatedAt: new Date().toISOString(),
+        lastEditedBy: 'You'
+      }))
+    }
+  })
+
+  // Auto-save with debounce
+  const debouncedSave = useMemo(
+    () => debounce((content: string) => save({ id: docId, content }), 1000),
+    [docId, save]
+  )
+
+  if (isLoading) return <div>Loading document...</div>
+
+  return (
+    <div>
+      <header>
+        <h1>{doc?.title}</h1>
+        <span>
+          {isPending ? 'Saving...' : `Last edited by ${doc?.lastEditedBy}`}
+        </span>
+      </header>
+      <textarea
+        value={localContent}
+        onChange={(e) => {
+          setLocalContent(e.target.value)
+          debouncedSave(e.target.value)
+        }}
+      />
+    </div>
+  )
+}
+```
+
+---
+
+### Drag and Drop Reordering
+
+Optimistic reordering for smooth UX:
+
+```tsx
+interface Task {
+  id: string
+  title: string
+  order: number
+}
+
+const tasksCollection = defineCollection<Task>({
+  name: 'tasks',
+  id: (task) => task.id,
+  fetch: () => api.get('/tasks')
+})
+
+const reorderTask = defineMutation<{ id: string; newOrder: number }, Task[]>({
+  mutate: ({ id, newOrder }) => api.post(`/tasks/${id}/reorder`, { order: newOrder })
+})
+
+function TaskBoard() {
+  const [tasks] = useQuery(tasksCollection)
+  const sortedTasks = useMemo(
+    () => tasks?.slice().sort((a, b) => a.order - b.order),
+    [tasks]
+  )
+
+  const { mutate: reorder } = useMutation(reorderTask, {
+    optimistic: (channel, params) => {
+      channel(tasksCollection).updateWhere(
+        () => true, // Update all tasks
+        (task) => {
+          if (task.id === params.id) {
+            return { ...task, order: params.newOrder }
+          }
+          // Shift other tasks
+          if (task.order >= params.newOrder) {
+            return { ...task, order: task.order + 1 }
+          }
+          return task
+        }
+      )
+    }
+  })
+
+  const handleDrop = (draggedId: string, targetIndex: number) => {
+    reorder({ id: draggedId, newOrder: targetIndex })
+  }
+
+  return (
+    <div>
+      {sortedTasks?.map((task, index) => (
+        <div
+          key={task.id}
+          draggable
+          onDrop={() => handleDrop(task.id, index)}
+        >
+          {task.title}
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+---
+
+## API Reference
+
+### Definitions
+
+#### `defineCollection<TData, TParams>(config)`
+
+Define a collection (array of items).
+
+```typescript
+const collection = defineCollection<User, { page: number }>({
+  name: 'users',              // Unique identifier
+  id: (user) => user.id,      // How to identify items
+  fetch: (params) => api.get(`/users?page=${params.page}`)
 })
 ```
 
-### Entities (Single Items)
+#### `defineEntity<TData, TParams>(config)`
+
+Define an entity (single item).
 
 ```typescript
-interface Profile {
-  id: string
-  name: string
-  avatar: string
-}
-
-const profileEntity = defineEntity<Profile, string>({
+const entity = defineEntity<Profile, string>({
   name: 'profile',
   fetch: (userId) => api.get(`/users/${userId}/profile`)
 })
 ```
 
-### Mutations
+#### `defineMutation<TParams, TResponse>(config)`
+
+Define a mutation.
 
 ```typescript
-interface CreateUserParams {
-  name: string
-  email: string
-}
-
-const createUser = defineMutation<CreateUserParams, User>({
+const mutation = defineMutation<{ name: string }, User>({
   name: 'createUser',  // Optional: used as mutation key
   mutate: (params) => api.post('/users', params)
 })
 ```
 
-## Using Queries
+---
 
-### Basic Query
+### Hooks
 
-```typescript
-function UserList() {
-  const [users, { isLoading, error, refetch }] = useQuery(usersCollection)
+#### `useQuery(definition, options?)`
 
-  if (isLoading) return <Loading />
-  if (error) return <Error error={error} />
-
-  return <ul>{users?.map(u => <li key={u.id}>{u.name}</li>)}</ul>
-}
-```
-
-### With Parameters
+Fetch data from a collection or entity.
 
 ```typescript
-const [users] = useQuery(usersCollection, {
-  params: { page: 2 }
-})
-```
+// Collection
+const [users, queryState] = useQuery(usersCollection)
+const [users, queryState] = useQuery(usersCollection, { params: { page: 2 } })
 
-### Entity Query
+// Entity
+const [profile, queryState] = useQuery(profileEntity, { params: userId })
 
-```typescript
-const [profile] = useQuery(profileEntity, {
-  params: userId
-})
-```
-
-### Paginated (Infinite) Query
-
-```typescript
-const [posts, query, pagination] = useQuery(postsCollection, {
+// Paginated
+const [posts, queryState, pagination] = useQuery(postsCollection, {
   paginated: true,
-  getPageParams: ({ pageParam = 1 }) => ({ page: pageParam, limit: 10 })
+  getPageParams: ({ pageParam = 1 }) => ({ page: pageParam })
 })
-
-// Load more
-<button onClick={pagination.fetchNextPage} disabled={!pagination.hasNextPage}>
-  Load More
-</button>
 ```
 
-## Optimistic Updates with Channel API
+**Options:**
+| Option | Type | Description |
+|--------|------|-------------|
+| `params` | `TParams` | Parameters for fetch function |
+| `enabled` | `boolean` | Enable/disable query |
+| `staleTime` | `number` | Time before data is stale (ms) |
+| `refetchOnMount` | `boolean` | Refetch on component mount |
+| `refetchOnWindowFocus` | `boolean` | Refetch when window focuses |
+| `refetchInterval` | `number` | Polling interval (ms) |
+| `paginated` | `boolean` | Enable infinite query mode |
+| `getPageParams` | `function` | Transform page context to params |
 
-The channel API provides an imperative way to apply optimistic updates:
+**Returns:**
+- `data` - The fetched data (or `undefined`)
+- `queryState` - `{ isLoading, isFetching, error, refetch, ... }`
+- `pagination` (paginated only) - `{ hasNextPage, fetchNextPage, isFetchingNextPage, ... }`
+
+---
+
+#### `useMutation(definition, options?)`
+
+Execute mutations with optional optimistic updates.
 
 ```typescript
-const { mutate } = useMutation(createUser, {
-  optimistic: (channel, params) => {
-    // Add to collection immediately
-    channel(usersCollection).prepend({
-      id: 'temp-' + Date.now(),
-      name: params.name,
-      email: params.email,
-    }, { sync: true })  // sync: replace with server response
+const { mutate, mutateAsync, isPending, isError, error, data, reset } = useMutation(
+  createUser,
+  {
+    optimistic: (channel, params) => {
+      channel(usersCollection).append(params, { sync: true })
+    },
+    onSuccess: (data) => console.log('Created:', data),
+    onError: (error) => console.error('Failed:', error)
   }
-})
+)
 ```
 
-### Collection Operations
+**Options:**
+| Option | Type | Description |
+|--------|------|-------------|
+| `optimistic` | `(channel, params) => void` | Apply optimistic updates |
+| `onMutate` | `(params) => void` | Called when mutation starts |
+| `onSuccess` | `(data, params) => void` | Called on success |
+| `onError` | `(error, params) => void` | Called on error |
+
+---
+
+### Channel API
+
+The channel provides intuitive methods for optimistic updates.
+
+#### Collection Methods
 
 ```typescript
 optimistic: (channel, params) => {
   const ch = channel(usersCollection)
 
   // Add items
-  ch.prepend(newItem, { sync: true })
-  ch.append(newItem, { sync: true })
+  ch.prepend(newItem, { sync: true })  // Add to beginning
+  ch.append(newItem, { sync: true })   // Add to end
 
   // Update by ID
-  ch.update(params.id, user => ({
-    ...user,
-    name: params.newName
-  }))
+  ch.update(id, item => ({ ...item, name: newName }))
+
+  // Update matching items
+  ch.updateWhere(
+    item => item.status === 'active',
+    item => ({ ...item, highlighted: true })
+  )
 
   // Delete by ID
-  ch.delete(params.id)
+  ch.delete(id)
+
+  // Delete matching items
+  ch.deleteWhere(item => item.expired)
 }
 ```
 
-### Entity Operations
+#### Entity Methods
 
 ```typescript
 optimistic: (channel, params) => {
-  channel(profileEntity).update(profile => ({
-    ...profile,
-    name: params.newName
-  }))
+  const ch = channel(profileEntity)
 
-  // Or replace entirely
-  channel(profileEntity).replace(newProfile)
+  // Partial update
+  ch.update(profile => ({ ...profile, name: newName }))
+
+  // Full replacement
+  ch.replace(newProfile)
 }
 ```
 
-### Multiple Updates
+#### Sync Option
 
-Update multiple collections/entities in a single mutation:
+Use `{ sync: true }` when the server response should replace the optimistic data:
 
 ```typescript
-const { mutate } = useMutation(deleteUser, {
-  optimistic: (channel, params) => {
-    // Remove from users list
-    channel(usersCollection).delete(params.userId)
-
-    // Update stats
-    channel(statsEntity).update(stats => ({
-      ...stats,
-      userCount: stats.userCount - 1
-    }))
-  }
-})
+// The temp ID will be replaced with the server's real ID
+channel(todosCollection).append({
+  id: `temp-${Date.now()}`,
+  title: 'New todo'
+}, { sync: true })
 ```
 
-## Standalone Channel (Outside Mutations)
+---
 
-Use the channel directly for immediate updates with manual rollback:
+### Standalone Channel
+
+Use outside mutations for manual control:
 
 ```typescript
-import { channel } from 'query-toolkit'
+import { channel } from 'query-optimistic'
 
-async function handleLike(postId: string) {
-  // Apply optimistic update immediately
+async function handleQuickAction(postId: string) {
+  // Apply immediately
   const rollback = channel(postsCollection).update(postId, post => ({
     ...post,
     likes: post.likes + 1
@@ -237,135 +765,115 @@ async function handleLike(postId: string) {
   try {
     await api.post(`/posts/${postId}/like`)
   } catch (error) {
-    // Undo on failure
-    rollback()
+    rollback() // Undo on failure
   }
 }
 ```
 
-## Optimistic Status
+---
 
-Items with pending optimistic updates include metadata for UI feedback:
+### Optimistic Status
+
+Track pending operations in your UI:
 
 ```typescript
-{users?.map(user => (
-  <div
-    key={user.id}
-    style={{ opacity: user._optimistic?.status === 'pending' ? 0.5 : 1 }}
-  >
-    {user.name}
-    {user._optimistic?.status === 'error' && (
+interface OptimisticMeta {
+  status: 'pending' | 'error'
+  error?: Error
+}
+
+// Available on items during optimistic updates
+{items?.map(item => (
+  <div style={{
+    opacity: item._optimistic?.status === 'pending' ? 0.5 : 1
+  }}>
+    {item.name}
+    {item._optimistic?.status === 'error' && (
       <span className="error">Failed to save</span>
     )}
   </div>
 ))}
 ```
 
-## API Reference
-
-### `defineCollection<TData, TParams>(config)`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | `string` | Unique identifier |
-| `id` | `(item: TData) => string` | Extract ID from item |
-| `fetch` | `(params: TParams) => Promise<TData[]>` | Fetch function |
-
-### `defineEntity<TData, TParams>(config)`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | `string` | Unique identifier |
-| `fetch` | `(params: TParams) => Promise<TData>` | Fetch function |
-
-### `defineMutation<TParams, TResponse>(config)`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `name?` | `string` | Optional mutation key |
-| `mutate` | `(params: TParams) => Promise<TResponse>` | Mutation function |
-
-### `useQuery(def, options?)`
-
-Returns `[data, queryState]` or `[data, queryState, paginationState]` for paginated queries.
-
-**Options:**
-- `params` - Parameters for fetch function
-- `enabled` - Enable/disable query
-- `staleTime` - Time before data is stale (ms)
-- `refetchOnMount` - Refetch on component mount
-- `refetchOnWindowFocus` - Refetch when window focuses
-- `refetchInterval` - Polling interval (ms)
-- `paginated` - Enable infinite query mode
-- `getPageParams` - Transform page context to params
-
-### `useMutation(def, options?)`
-
-Returns `{ mutate, mutateAsync, isPending, isError, isSuccess, error, data, reset }`.
-
-**Options:**
-- `optimistic` - `(channel, params) => void` - Apply optimistic updates
-- `onMutate` - Called when mutation starts
-- `onSuccess` - Called on success
-- `onError` - Called on error
-
-### `channel(target)`
-
-Standalone channel for immediate optimistic updates.
-
-```typescript
-// For collections
-channel(collection).prepend(item, { sync?: boolean })
-channel(collection).append(item, { sync?: boolean })
-channel(collection).update(id, updateFn, { sync?: boolean })
-channel(collection).updateWhere(predicate, updateFn)
-channel(collection).delete(id)
-channel(collection).deleteWhere(predicate)
-
-// For entities
-channel(entity).update(updateFn, { sync?: boolean })
-channel(entity).replace(data, { sync?: boolean })
-```
-
-All methods return a rollback function.
-
-## Submodule Imports
-
-```typescript
-// Core only (no React dependency)
-import { defineCollection, defineEntity, defineMutation, channel } from 'query-toolkit/core'
-
-// React hooks only
-import { useQuery, useMutation } from 'query-toolkit/react'
-```
+---
 
 ## TypeScript
 
-Full type inference from definitions:
+Full type inference flows from definitions to usage:
 
 ```typescript
-const usersCollection = defineCollection<User, { page: number }>({...})
-const createUser = defineMutation<CreateUserParams, User>({...})
+// Define with types
+const usersCollection = defineCollection<User, { page: number }>({
+  name: 'users',
+  id: (user) => user.id,  // user: User
+  fetch: ({ page }) => api.get(`/users?page=${page}`)  // page: number
+})
+
+const createUser = defineMutation<CreateUserParams, User>({
+  mutate: (params) => api.post('/users', params)  // params: CreateUserParams
+})
 
 // Types flow automatically
-const [users] = useQuery(usersCollection, { params: { page: 1 } })
+const [users] = useQuery(usersCollection, {
+  params: { page: 1 }  // TypeScript enforces { page: number }
+})
 // users: User[] | undefined
 
 const { mutate } = useMutation(createUser, {
   optimistic: (channel, params) => {
-    // params: CreateUserParams
-    channel(usersCollection).prepend({...})
-    // Type-checks that data matches User
+    // params: CreateUserParams (inferred)
+    channel(usersCollection).append({
+      // TypeScript ensures this matches User
+    })
   }
 })
 // mutate: (params: CreateUserParams) => void
 ```
 
+---
+
+## Submodule Imports
+
+```typescript
+// Full library
+import { defineCollection, useQuery, useMutation } from 'query-optimistic'
+
+// Core only (no React dependency)
+import { defineCollection, defineEntity, defineMutation, channel } from 'query-optimistic/core'
+
+// React hooks only
+import { useQuery, useMutation } from 'query-optimistic/react'
+```
+
+---
+
 ## Peer Dependencies
 
-- `react` >= 18.0.0
-- `@tanstack/react-query` >= 5.0.0
+| Package | Version |
+|---------|---------|
+| `react` | >= 18.0.0 |
+| `@tanstack/react-query` | >= 5.0.0 |
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
 
 ## License
 
-MIT
+MIT - see [LICENSE](./LICENSE) for details.
+
+---
+
+<p align="center">
+  Made with care for the React community
+</p>
