@@ -29,10 +29,31 @@ export interface UseQueryHookOptions<TParams> extends QueryOptions {
 
 /** Query state object (second element of tuple) */
 export interface QueryState {
+  /** True when fetching for the first time (no data yet) */
   isLoading: boolean;
+  /** True when any fetch is in progress (including background refetches) */
   isFetching: boolean;
+  /** True when the query has successfully fetched data */
+  isSuccess: boolean;
+  /** True when the query has encountered an error */
   isError: boolean;
+  /** Alias for isLoading (TanStack Query v5 naming) */
+  isPending: boolean;
+  /** The current status: 'pending' | 'error' | 'success' */
+  status: 'pending' | 'error' | 'success';
+  /** The error object if isError is true */
   error: Error | null;
+  /** Timestamp of when the data was last updated */
+  dataUpdatedAt: number;
+  /** Timestamp of when the error was last updated */
+  errorUpdatedAt: number;
+  /** Number of times the query has failed */
+  failureCount: number;
+  /** True if data is considered stale */
+  isStale: boolean;
+  /** True if data is from the cache (placeholder while fetching) */
+  isPlaceholderData: boolean;
+  /** Manually refetch the query */
   refetch: () => void;
 }
 
@@ -146,8 +167,16 @@ export function useQuery<TData, TParams>(
       {
         isLoading: query.isLoading,
         isFetching: query.isFetching,
+        isSuccess: query.isSuccess,
         isError: query.isError,
+        isPending: query.isPending,
+        status: query.status,
         error: query.error,
+        dataUpdatedAt: query.dataUpdatedAt,
+        errorUpdatedAt: query.errorUpdatedAt,
+        failureCount: query.failureCount,
+        isStale: query.isStale,
+        isPlaceholderData: query.isPlaceholderData,
         refetch: query.refetch,
       },
     ];
@@ -214,8 +243,16 @@ export function useQuery<TData, TParams>(
       {
         isLoading: infiniteQuery.isLoading,
         isFetching: infiniteQuery.isFetching,
+        isSuccess: infiniteQuery.isSuccess,
         isError: infiniteQuery.isError,
+        isPending: infiniteQuery.isPending,
+        status: infiniteQuery.status,
         error: infiniteQuery.error,
+        dataUpdatedAt: infiniteQuery.dataUpdatedAt,
+        errorUpdatedAt: infiniteQuery.errorUpdatedAt,
+        failureCount: infiniteQuery.failureCount,
+        isStale: infiniteQuery.isStale,
+        isPlaceholderData: infiniteQuery.isPlaceholderData,
         refetch: infiniteQuery.refetch,
       },
       {
@@ -261,8 +298,16 @@ export function useQuery<TData, TParams>(
     {
       isLoading: query.isLoading,
       isFetching: query.isFetching,
+      isSuccess: query.isSuccess,
       isError: query.isError,
+      isPending: query.isPending,
+      status: query.status,
       error: query.error,
+      dataUpdatedAt: query.dataUpdatedAt,
+      errorUpdatedAt: query.errorUpdatedAt,
+      failureCount: query.failureCount,
+      isStale: query.isStale,
+      isPlaceholderData: query.isPlaceholderData,
       refetch: query.refetch,
     },
   ];
