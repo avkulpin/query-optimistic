@@ -8,8 +8,4 @@ export type {
 } from './use-query';
 
 export { useMutation } from './use-mutation';
-export type {
-  OptimisticConfig,
-  UseMutationOptions,
-  MutationResult,
-} from './use-mutation';
+export type { OptimisticConfig, UseMutationOptions } from './use-mutation';

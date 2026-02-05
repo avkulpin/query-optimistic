@@ -42,5 +42,4 @@ export type {
   EntityResult,
   OptimisticConfig,
   UseMutationOptions,
-  MutationResult,
 } from './react';

@@ -1,4 +1,7 @@
-import { useMutation as useTanstackMutation } from '@tanstack/react-query';
+import {
+  useMutation as useTanstackMutation,
+  type UseMutationResult,
+} from '@tanstack/react-query';
 import { nanoid } from 'nanoid';
 import type {
   MutationDef,
@@ -213,19 +216,6 @@ export interface UseMutationOptions<TParams, TResponse> {
   onError?: (error: Error, params: TParams) => void;
 }
 
-/** Return type for useMutation */
-export interface MutationResult<TParams, TResponse> {
-  mutate: (params: TParams) => void;
-  mutateAsync: (params: TParams) => Promise<TResponse>;
-  isLoading: boolean;
-  isPending: boolean;
-  isError: boolean;
-  isSuccess: boolean;
-  error: Error | null;
-  data: TResponse | undefined;
-  reset: () => void;
-}
-
 /**
  * Mutation hook with simplified optimistic updates
  *
@@ -261,7 +251,7 @@ export function useMutation<
     /** Optimistic update configuration - receives channel and params */
     optimistic?: (channel: BatchedChannel, params: TParams) => void;
   }
-): MutationResult<TParams, TResponse> {
+): UseMutationResult<TResponse, Error, TParams> {
   const mutation = useTanstackMutation<
     TResponse,
     Error,
@@ -336,15 +326,5 @@ export function useMutation<
     },
   });
 
-  return {
-    mutate: mutation.mutate,
-    mutateAsync: mutation.mutateAsync,
-    isLoading: mutation.isPending,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
-    isSuccess: mutation.isSuccess,
-    error: mutation.error,
-    data: mutation.data,
-    reset: mutation.reset,
-  };
+  return mutation;
 }
