@@ -37,8 +37,6 @@ export {
 
 export type {
   UseQueryHookOptions,
-  QueryState,
-  PaginationState,
   QueryResult,
   PaginatedQueryResult,
   EntityResult,

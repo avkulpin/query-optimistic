@@ -2,8 +2,6 @@
 export { useQuery } from './use-query';
 export type {
   UseQueryHookOptions,
-  QueryState,
-  PaginationState,
   QueryResult,
   PaginatedQueryResult,
   EntityResult,

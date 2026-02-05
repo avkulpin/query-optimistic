@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   useQuery as useTanstackQuery,
   useInfiniteQuery,
   useQueryClient,
-  type UseQueryOptions,
-  type UseInfiniteQueryOptions,
+  type UseQueryResult,
+  type UseInfiniteQueryResult,
 } from '@tanstack/react-query';
 import type {
   CollectionDef,
   EntityDef,
   Optimistic,
   QueryOptions,
-  PaginatedOptions,
 } from '../core/types';
 import { registry } from '../core/registry';
 
@@ -27,76 +26,43 @@ export interface UseQueryHookOptions<TParams> extends QueryOptions {
   queryKey?: readonly unknown[];
 }
 
-/** Query state object (second element of tuple) */
-export interface QueryState {
-  /** True when fetching for the first time (no data yet) */
-  isLoading: boolean;
-  /** True when any fetch is in progress (including background refetches) */
-  isFetching: boolean;
-  /** True when the query has successfully fetched data */
-  isSuccess: boolean;
-  /** True when the query has encountered an error */
-  isError: boolean;
-  /** Alias for isLoading (TanStack Query v5 naming) */
-  isPending: boolean;
-  /** The current status: 'pending' | 'error' | 'success' */
-  status: 'pending' | 'error' | 'success';
-  /** The error object if isError is true */
-  error: Error | null;
-  /** Timestamp of when the data was last updated */
-  dataUpdatedAt: number;
-  /** Timestamp of when the error was last updated */
-  errorUpdatedAt: number;
-  /** Number of times the query has failed */
-  failureCount: number;
-  /** True if data is considered stale */
-  isStale: boolean;
-  /** True if data is from the cache (placeholder while fetching) */
-  isPlaceholderData: boolean;
-  /** Manually refetch the query */
-  refetch: () => void;
-}
-
-/** Pagination state object (third element of paginated tuple) */
-export interface PaginationState {
-  hasNextPage: boolean;
-  fetchNextPage: () => void;
-  isFetchingNextPage: boolean;
-}
-
-/** Return type for collection queries: [data, queryState] */
+/** Return type for collection queries: [data, queryResult] */
 export type QueryResult<T> = [
   Optimistic<T>[] | undefined,
-  QueryState
+  UseQueryResult<T[], Error>
 ];
 
-/** Return type for paginated queries: [data, queryState, paginationState] */
+/** Return type for paginated queries: [data, infiniteQueryResult] */
 export type PaginatedQueryResult<T> = [
   Optimistic<T>[] | undefined,
-  QueryState,
-  PaginationState
+  UseInfiniteQueryResult<{ pages: T[][]; pageParams: unknown[] }, Error>
 ];
 
-/** Return type for entity queries: [data, queryState] */
+/** Return type for entity queries: [data, queryResult] */
 export type EntityResult<T> = [
   Optimistic<T> | undefined,
-  QueryState
+  UseQueryResult<T, Error>
 ];
 
 /**
  * Unified query hook for fetching data
  *
+ * Returns a tuple of [data, queryResult] where queryResult is the full
+ * TanStack Query result object with all properties (isLoading, isError,
+ * refetch, etc.)
+ *
  * @example
  * // Simple collection query
  * const [data, query] = useQuery(postsQuery, { params: { limit: 10 } })
+ * // query.isLoading, query.isError, query.refetch(), etc.
  *
  * @example
- * // Paginated query
- * const [data, query, pagination] = useQuery(postsQuery, {
+ * // Paginated query - returns full infinite query result
+ * const [data, query] = useQuery(postsQuery, {
  *   paginated: true,
  *   getPageParams: ({ pageParam }) => ({ page: pageParam, limit: 10 })
  * })
- * // pagination.fetchNextPage(), pagination.hasNextPage
+ * // query.fetchNextPage(), query.hasNextPage, query.isFetchingNextPage
  *
  * @example
  * // Entity query
@@ -104,7 +70,7 @@ export type EntityResult<T> = [
  */
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams> & { paginated: true }
+  options: UseQueryHookOptions<TParams> & { paginated: true }
 ): PaginatedQueryResult<TData>;
 
 export function useQuery<TData, TParams>(
@@ -164,21 +130,7 @@ export function useQuery<TData, TParams>(
 
     return [
       query.data as Optimistic<TData> | undefined,
-      {
-        isLoading: query.isLoading,
-        isFetching: query.isFetching,
-        isSuccess: query.isSuccess,
-        isError: query.isError,
-        isPending: query.isPending,
-        status: query.status,
-        error: query.error,
-        dataUpdatedAt: query.dataUpdatedAt,
-        errorUpdatedAt: query.errorUpdatedAt,
-        failureCount: query.failureCount,
-        isStale: query.isStale,
-        isPlaceholderData: query.isPlaceholderData,
-        refetch: query.refetch,
-      },
+      query as UseQueryResult<TData, Error>,
     ];
   }
 
@@ -240,26 +192,7 @@ export function useQuery<TData, TParams>(
 
     return [
       flatData,
-      {
-        isLoading: infiniteQuery.isLoading,
-        isFetching: infiniteQuery.isFetching,
-        isSuccess: infiniteQuery.isSuccess,
-        isError: infiniteQuery.isError,
-        isPending: infiniteQuery.isPending,
-        status: infiniteQuery.status,
-        error: infiniteQuery.error,
-        dataUpdatedAt: infiniteQuery.dataUpdatedAt,
-        errorUpdatedAt: infiniteQuery.errorUpdatedAt,
-        failureCount: infiniteQuery.failureCount,
-        isStale: infiniteQuery.isStale,
-        isPlaceholderData: infiniteQuery.isPlaceholderData,
-        refetch: infiniteQuery.refetch,
-      },
-      {
-        hasNextPage: infiniteQuery.hasNextPage ?? false,
-        fetchNextPage: infiniteQuery.fetchNextPage,
-        isFetchingNextPage: infiniteQuery.isFetchingNextPage,
-      },
+      infiniteQuery as UseInfiniteQueryResult<{ pages: TData[][]; pageParams: unknown[] }, Error>,
     ];
   }
 
@@ -295,20 +228,6 @@ export function useQuery<TData, TParams>(
 
   return [
     query.data as Optimistic<TData>[] | undefined,
-    {
-      isLoading: query.isLoading,
-      isFetching: query.isFetching,
-      isSuccess: query.isSuccess,
-      isError: query.isError,
-      isPending: query.isPending,
-      status: query.status,
-      error: query.error,
-      dataUpdatedAt: query.dataUpdatedAt,
-      errorUpdatedAt: query.errorUpdatedAt,
-      failureCount: query.failureCount,
-      isStale: query.isStale,
-      isPlaceholderData: query.isPlaceholderData,
-      refetch: query.refetch,
-    },
+    query as UseQueryResult<TData[], Error>,
   ];
 }

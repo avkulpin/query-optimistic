@@ -5,22 +5,20 @@
  *
  * Demonstrates:
  * - useQuery with paginated option (infinite scrolling)
- * - QueryState: isSuccess, dataUpdatedAt
- * - getPageParams for transforming page context
- * - pagination state (hasNextPage, fetchNextPage, isFetchingNextPage)
+ * - Full TanStack Query infinite query result object
+ * - hasNextPage, fetchNextPage, isFetchingNextPage on query object
  */
 
 import { useQuery, useMutation } from 'query-optimistic';
 import { postsCollection, likePostMutation } from '@/lib/definitions';
 
 export function InfiniteFeed() {
-  const [posts, { isLoading, isSuccess, isError, error, dataUpdatedAt }, pagination] = useQuery(
-    postsCollection,
-    {
-      paginated: true,
-      getPageParams: ({ pageParam }) => ({ page: pageParam ?? 1 }),
-    }
-  );
+  // Paginated query returns [data, infiniteQueryResult]
+  // All pagination methods are on the query object directly
+  const [posts, query] = useQuery(postsCollection, {
+    paginated: true,
+    getPageParams: ({ pageParam }) => ({ page: pageParam ?? 1 }),
+  });
 
   const { mutate: likePost } = useMutation(likePostMutation, {
     optimistic: (channel, params) => {
@@ -31,12 +29,12 @@ export function InfiniteFeed() {
     },
   });
 
-  if (isLoading) {
+  if (query.isLoading) {
     return <div className="loading">Loading feed...</div>;
   }
 
-  if (isError) {
-    return <div className="error">Error loading feed: {error?.message}</div>;
+  if (query.isError) {
+    return <div className="error">Error loading feed: {query.error?.message}</div>;
   }
 
   return (
@@ -44,10 +42,10 @@ export function InfiniteFeed() {
       <h2>Social Feed</h2>
 
       <div className="query-state-info">
-        {isSuccess && <span className="status-badge success">isSuccess</span>}
-        {dataUpdatedAt > 0 && (
+        {query.isSuccess && <span className="status-badge success">isSuccess</span>}
+        {query.dataUpdatedAt > 0 && (
           <span className="status-badge time">
-            Updated: {new Date(dataUpdatedAt).toLocaleTimeString()}
+            Updated: {new Date(query.dataUpdatedAt).toLocaleTimeString()}
           </span>
         )}
       </div>
@@ -78,11 +76,12 @@ export function InfiniteFeed() {
         ))}
       </div>
 
+      {/* Pagination - all methods are on the query object */}
       <div className="load-more">
-        {pagination.isFetchingNextPage ? (
+        {query.isFetchingNextPage ? (
           <div className="loading-indicator">Loading more posts...</div>
-        ) : pagination.hasNextPage ? (
-          <button onClick={() => pagination.fetchNextPage()} className="load-more-btn">
+        ) : query.hasNextPage ? (
+          <button onClick={() => query.fetchNextPage()} className="load-more-btn">
             Load More Posts
           </button>
         ) : (
