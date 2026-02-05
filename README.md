@@ -53,7 +53,7 @@ useMutation({
 // After: query-optimistic
 useMutation(createTodo, {
   optimistic: (channel, todo) => {
-    channel(todosCollection).append(todo, { sync: true })
+    channel(todosCollection).append(todo, { reconcile: true })
   }
 })
 ```
@@ -117,7 +117,7 @@ function TodoApp() {
         id: `temp-${Date.now()}`,
         title: params.title,
         completed: false,
-      }, { sync: true })
+      }, { reconcile: true })
     }
   })
 
@@ -197,7 +197,7 @@ function TodoList() {
         title: params.title,
         completed: false,
         createdAt: new Date().toISOString()
-      }, { sync: true })
+      }, { reconcile: true })
     }
   })
 
@@ -669,7 +669,7 @@ const { mutate, mutateAsync, isPending, isError, error, data, reset } = useMutat
   createUser,
   {
     optimistic: (channel, params) => {
-      channel(usersCollection).append(params, { sync: true })
+      channel(usersCollection).append(params, { reconcile: true })
     },
     onSuccess: (data) => console.log('Created:', data),
     onError: (error) => console.error('Failed:', error)
@@ -698,8 +698,8 @@ optimistic: (channel, params) => {
   const ch = channel(usersCollection)
 
   // Add items
-  ch.prepend(newItem, { sync: true })  // Add to beginning
-  ch.append(newItem, { sync: true })   // Add to end
+  ch.prepend(newItem, { reconcile: true })  // Add to beginning
+  ch.append(newItem, { reconcile: true })   // Add to end
 
   // Update by ID
   ch.update(id, item => ({ ...item, name: newName }))
@@ -732,16 +732,16 @@ optimistic: (channel, params) => {
 }
 ```
 
-#### Sync Option
+#### Reconcile Option
 
-Use `{ sync: true }` when the server response should replace the optimistic data:
+Use `{ reconcile: true }` when the server response should replace the optimistic data:
 
 ```typescript
 // The temp ID will be replaced with the server's real ID
 channel(todosCollection).append({
   id: `temp-${Date.now()}`,
   title: 'New todo'
-}, { sync: true })
+}, { reconcile: true })
 ```
 
 ---

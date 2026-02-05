@@ -27,8 +27,8 @@ interface OptimisticConfigBase<
 > {
   /** Target collection/entity to update */
   target: TTarget;
-  /** Whether to sync with server response (replace optimistic with real data) */
-  sync?: boolean;
+  /** Whether to reconcile with server response (replace optimistic with real data) */
+  reconcile?: boolean;
 }
 
 /** Config for prepend/append actions - requires full entity */
@@ -101,7 +101,7 @@ interface MutationTransaction {
   id?: string;
   where?: (item: any) => boolean;
   update?: (item: any) => any;
-  sync?: boolean;
+  reconcile?: boolean;
 }
 
 /** Internal collection channel for batched mutations */
@@ -111,33 +111,33 @@ class BatchedCollectionChannel<TEntity> {
     private readonly transactions: MutationTransaction[]
   ) {}
 
-  prepend(data: TEntity, options?: { sync?: boolean }): this {
+  prepend(data: TEntity, options?: { reconcile?: boolean }): this {
     this.transactions.push({
       target: this.target,
       action: 'prepend',
       data,
-      sync: options?.sync,
+      reconcile: options?.reconcile,
     });
     return this;
   }
 
-  append(data: TEntity, options?: { sync?: boolean }): this {
+  append(data: TEntity, options?: { reconcile?: boolean }): this {
     this.transactions.push({
       target: this.target,
       action: 'append',
       data,
-      sync: options?.sync,
+      reconcile: options?.reconcile,
     });
     return this;
   }
 
-  update(id: string, updateFn: (item: TEntity) => TEntity, options?: { sync?: boolean }): this {
+  update(id: string, updateFn: (item: TEntity) => TEntity, options?: { reconcile?: boolean }): this {
     this.transactions.push({
       target: this.target,
       action: 'update',
       id,
       update: updateFn,
-      sync: options?.sync,
+      reconcile: options?.reconcile,
     });
     return this;
   }
@@ -159,22 +159,22 @@ class BatchedEntityChannel<TEntity> {
     private readonly transactions: MutationTransaction[]
   ) {}
 
-  update(updateFn: (item: TEntity) => TEntity, options?: { sync?: boolean }): this {
+  update(updateFn: (item: TEntity) => TEntity, options?: { reconcile?: boolean }): this {
     this.transactions.push({
       target: this.target,
       action: 'update',
       update: updateFn,
-      sync: options?.sync,
+      reconcile: options?.reconcile,
     });
     return this;
   }
 
-  replace(data: TEntity, options?: { sync?: boolean }): this {
+  replace(data: TEntity, options?: { reconcile?: boolean }): this {
     this.transactions.push({
       target: this.target,
       action: 'replace',
       data,
-      sync: options?.sync,
+      reconcile: options?.reconcile,
     });
     return this;
   }
@@ -312,10 +312,10 @@ export function useMutation<
     },
 
     onSuccess: (data, params, context) => {
-      // If sync is enabled, replace optimistic data with server response
+      // If reconcile is enabled, replace optimistic data with server response
       if (context?.transactions) {
         for (const tx of context.transactions) {
-          if (tx.sync && data) {
+          if (tx.reconcile && data) {
             // Replace optimistic item with real server data
             registry.applyUpdate(tx.target.name, 'update', {
               where: (item: any) =>
