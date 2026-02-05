@@ -84,7 +84,16 @@ class QueryRegistry {
     const entries = this.getByName(name);
     const rollbacks: (() => void)[] = [];
 
-    for (const entry of entries) {
+    // Deduplicate by queryKey to avoid updating the same cache entry multiple times
+    const seenKeys = new Set<string>();
+    const uniqueEntries = entries.filter((entry) => {
+      const key = JSON.stringify(entry.queryKey);
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+
+    for (const entry of uniqueEntries) {
       if (entry.kind === 'collection') {
         const previous = entry.getData();
         const rollback = () => entry.setData(() => previous);
