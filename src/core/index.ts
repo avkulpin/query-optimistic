@@ -27,4 +27,4 @@ export type {
 
 // Channel for standalone optimistic mutations
 export { channel, CollectionChannel, EntityChannel } from './channel';
-export type { Channel, OptimisticTransaction } from './channel';
+export type { Channel, ChannelOptions, OptimisticTransaction } from './channel';

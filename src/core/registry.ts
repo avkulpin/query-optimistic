@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import type { CollectionDef, EntityDef, Optimistic } from './types';
 
 /** Registered collection entry */
@@ -45,6 +46,18 @@ export type RegisteredEntry =
  */
 class QueryRegistry {
   private entries = new Map<string, Set<RegisteredEntry>>();
+  private queryClient: QueryClient | null = null;
+  private collectionDefs = new Map<string, CollectionDef<any, any>>();
+
+  /** Set the query client for direct cache access */
+  setQueryClient(client: QueryClient): void {
+    this.queryClient = client;
+  }
+
+  /** Register a collection definition for direct cache updates */
+  registerDef(def: CollectionDef<any, any>): void {
+    this.collectionDefs.set(def.name, def);
+  }
 
   /** Register an active query */
   register(entry: RegisteredEntry): void {
@@ -52,6 +65,11 @@ class QueryRegistry {
       this.entries.set(entry.name, new Set());
     }
     this.entries.get(entry.name)!.add(entry);
+
+    // Also store the def for direct cache access
+    if (entry.kind === 'collection' || entry.kind === 'paginated') {
+      this.collectionDefs.set(entry.name, entry.def);
+    }
   }
 
   /** Unregister a query when component unmounts */
@@ -70,6 +88,18 @@ class QueryRegistry {
     return Array.from(this.entries.get(name) ?? []);
   }
 
+  /**
+   * Check if params partially match the given scope object.
+   * Returns true if all key-value pairs in scope exist in params.
+   */
+  private matchesScope(params: Record<string, unknown> | undefined, scope?: Record<string, unknown>): boolean {
+    if (!scope) return true;
+    if (!params) return false;
+
+    // Check if all scope keys exist in params with same value
+    return Object.entries(scope).every(([key, value]) => params[key] === value);
+  }
+
   /** Apply an optimistic update to all queries with given name */
   applyUpdate<T>(
     name: string,
@@ -79,8 +109,15 @@ class QueryRegistry {
       id?: string;
       where?: (item: T) => boolean;
       update?: (item: T) => T;
-    }
+    },
+    scope?: Record<string, unknown>
   ): (() => void)[] {
+    // When scope is provided and we have a queryClient, update cache directly
+    if (scope && this.queryClient) {
+      return this.applyDirectCacheUpdate(name, action, payload, scope);
+    }
+
+    // Otherwise, use registry-based updates
     const entries = this.getByName(name);
     const rollbacks: (() => void)[] = [];
 
@@ -90,7 +127,9 @@ class QueryRegistry {
       const key = JSON.stringify(entry.queryKey);
       if (seenKeys.has(key)) return false;
       seenKeys.add(key);
-      return true;
+      // Also filter by scope if provided
+      const params = entry.queryKey[1] as Record<string, unknown> | undefined;
+      return this.matchesScope(params, scope);
     });
 
     for (const entry of uniqueEntries) {
@@ -129,6 +168,71 @@ class QueryRegistry {
         } else if (action === 'replace' && payload.data) {
           entry.setData(() => payload.data as T);
         }
+      }
+    }
+
+    return rollbacks;
+  }
+
+  /** Apply update directly to query cache (used when scope is provided) */
+  private applyDirectCacheUpdate<T>(
+    name: string,
+    action: 'prepend' | 'append' | 'update' | 'delete' | 'replace',
+    payload: {
+      data?: Partial<Optimistic<T>>;
+      id?: string;
+      where?: (item: T) => boolean;
+      update?: (item: T) => T;
+    },
+    scope: Record<string, unknown>
+  ): (() => void)[] {
+    if (!this.queryClient) return [];
+
+    const def = this.collectionDefs.get(name);
+    if (!def) return [];
+
+    const rollbacks: (() => void)[] = [];
+
+    // Get all queries with this name from the cache
+    const queries = this.queryClient.getQueriesData<T[] | { pages: T[][]; pageParams: unknown[] }>({
+      queryKey: [name],
+    });
+
+    for (const [queryKey, data] of queries) {
+      if (!data) continue;
+
+      // Extract params from queryKey [name, params]
+      const params = queryKey[1] as Record<string, unknown> | undefined;
+      if (!this.matchesScope(params, scope)) continue;
+
+      // Check if this is a paginated query
+      const isPaginated = data && typeof data === 'object' && 'pages' in data;
+
+      if (isPaginated) {
+        const paginatedData = data as { pages: T[][]; pageParams: unknown[] };
+        const previous = paginatedData;
+        rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
+
+        this.queryClient.setQueryData<{ pages: T[][]; pageParams: unknown[] }>(queryKey, (prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            pages: prev.pages.map((page, i) =>
+              i === 0
+                ? this.applyCollectionUpdate(page, action, payload, def.id)
+                : page
+            ),
+          };
+        });
+      } else {
+        const arrayData = data as T[];
+        const previous = arrayData;
+        rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
+
+        this.queryClient.setQueryData<T[]>(queryKey, (prev) => {
+          if (!prev) return prev;
+          return this.applyCollectionUpdate(prev, action, payload, def.id);
+        });
       }
     }
 

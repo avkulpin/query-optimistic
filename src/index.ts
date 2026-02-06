@@ -26,6 +26,7 @@ export type {
   RegisteredPaginatedCollection,
   RegisteredEntry,
   Channel,
+  ChannelOptions,
   OptimisticTransaction,
 } from './core';
 

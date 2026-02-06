@@ -95,6 +95,9 @@ export function useQuery<TData, TParams>(
   const queryClient = useQueryClient();
   const { params, paginated, getPageParams, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
 
+  // Set queryClient on registry for direct cache access
+  registry.setQueryClient(queryClient);
+
   // Build query key
   const queryKey = useMemo(
     () => customQueryKey ?? [def.name, params].filter(Boolean),

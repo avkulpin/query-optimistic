@@ -14,11 +14,26 @@ export interface OptimisticTransaction {
   rollback: () => void;
 }
 
+/** Options for channel operations */
+export interface ChannelOptions {
+  /**
+   * Only apply updates to queries whose params partially match this object.
+   * All key-value pairs in scope must exist in the query's params.
+   * @example
+   * channel(ordersCollection, { scope: { chain: 'solana' } }).delete(id)
+   * // Only affects queries with params containing chain: 'solana'
+   */
+  scope?: Record<string, unknown>;
+}
+
 /** Channel for a collection - provides typed optimistic mutation methods */
 export class CollectionChannel<TEntity> {
   private readonly optimisticId = nanoid();
 
-  constructor(private readonly target: CollectionDef<TEntity, any>) {}
+  constructor(
+    private readonly target: CollectionDef<TEntity, any>,
+    private readonly options?: ChannelOptions
+  ) {}
 
   /**
    * Prepend an item to the collection
@@ -32,7 +47,7 @@ export class CollectionChannel<TEntity> {
 
     const rollbacks = registry.applyUpdate(this.target.name, 'prepend', {
       data: optimisticData,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -49,7 +64,7 @@ export class CollectionChannel<TEntity> {
 
     const rollbacks = registry.applyUpdate(this.target.name, 'append', {
       data: optimisticData,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -66,7 +81,7 @@ export class CollectionChannel<TEntity> {
     const rollbacks = registry.applyUpdate(this.target.name, 'update', {
       id,
       update: updateFn,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -82,7 +97,7 @@ export class CollectionChannel<TEntity> {
     const rollbacks = registry.applyUpdate(this.target.name, 'update', {
       where,
       update: updateFn,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -94,7 +109,7 @@ export class CollectionChannel<TEntity> {
   delete(id: string): () => void {
     const rollbacks = registry.applyUpdate(this.target.name, 'delete', {
       id,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -106,7 +121,7 @@ export class CollectionChannel<TEntity> {
   deleteWhere(where: (item: TEntity) => boolean): () => void {
     const rollbacks = registry.applyUpdate(this.target.name, 'delete', {
       where,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -154,9 +169,14 @@ export class EntityChannel<TEntity> {
  * @example
  * // Update an entity
  * channel(userEntity).update(user => ({ ...user, name: 'Jane' }));
+ *
+ * @example
+ * // Scoped update
+ * channel(ordersCollection, { scope: { chain: 'solana' } }).delete(id);
+ * // Only affects queries with params containing chain: 'solana'
  */
 export interface Channel {
-  <TEntity>(target: CollectionDef<TEntity, any>): CollectionChannel<TEntity>;
+  <TEntity>(target: CollectionDef<TEntity, any>, options?: ChannelOptions): CollectionChannel<TEntity>;
   <TEntity>(target: EntityDef<TEntity, any>): EntityChannel<TEntity>;
 }
 
@@ -171,12 +191,17 @@ export interface Channel {
  * } catch (error) {
  *   rollback(); // Undo the optimistic update
  * }
+ *
+ * @example
+ * // Scoped update - only affects queries with matching params
+ * channel(ordersCollection, { scope: { chain: 'solana', status: 'pending' } }).delete(id);
  */
 export const channel: Channel = (<TEntity>(
-  target: CollectionDef<TEntity, any> | EntityDef<TEntity, any>
+  target: CollectionDef<TEntity, any> | EntityDef<TEntity, any>,
+  options?: ChannelOptions
 ): CollectionChannel<TEntity> | EntityChannel<TEntity> => {
   if (target._type === 'collection') {
-    return new CollectionChannel(target);
+    return new CollectionChannel(target, options);
   } else {
     return new EntityChannel(target);
   }
