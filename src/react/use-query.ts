@@ -24,6 +24,11 @@ export interface UseQueryHookOptions<TParams> extends QueryOptions {
   getPageParams?: (context: { pageParam: number }) => TParams;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
+  /**
+   * Keep this query registered for optimistic updates even when unmounted.
+   * Useful when you want updates from other pages to sync to this query's cache.
+   */
+  syncInBackground?: boolean;
 }
 
 /** Return type for collection queries: [data, queryResult] */
@@ -88,7 +93,7 @@ export function useQuery<TData, TParams>(
   options?: UseQueryHookOptions<TParams>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
-  const { params, paginated, getPageParams, queryKey: customQueryKey, ...queryOptions } = options ?? {};
+  const { params, paginated, getPageParams, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
 
   // Build query key
   const queryKey = useMemo(
@@ -112,7 +117,9 @@ export function useQuery<TData, TParams>(
 
     // Register for optimistic updates
     useEffect(() => {
-      if (query.status !== 'success' || !query.data) return;
+      if (query.status !== 'success' || !query.data) {
+        return;
+      }
 
       const entry = {
         kind: 'entity' as const,
@@ -125,8 +132,12 @@ export function useQuery<TData, TParams>(
       };
 
       registry.register(entry);
-      return () => registry.unregister(entry);
-    }, [def.name, queryKey, query.status, query.data, queryClient]);
+
+      // If syncInBackground is enabled, don't unregister on unmount
+      if (!syncInBackground) {
+        return () => registry.unregister(entry);
+      }
+    }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
 
     return [
       query.data as Optimistic<TData> | undefined,
@@ -187,8 +198,12 @@ export function useQuery<TData, TParams>(
       };
 
       registry.register(entry);
-      return () => registry.unregister(entry);
-    }, [def.name, queryKey, infiniteQuery.status, infiniteQuery.data, queryClient]);
+
+      // If syncInBackground is enabled, don't unregister on unmount
+      if (!syncInBackground) {
+        return () => registry.unregister(entry);
+      }
+    }, [def.name, queryKey, infiniteQuery.status, infiniteQuery.data, queryClient, syncInBackground]);
 
     return [
       flatData,
@@ -223,8 +238,12 @@ export function useQuery<TData, TParams>(
     };
 
     registry.register(entry);
-    return () => registry.unregister(entry);
-  }, [def.name, queryKey, query.status, query.data, queryClient]);
+
+    // If syncInBackground is enabled, don't unregister on unmount
+    if (!syncInBackground) {
+      return () => registry.unregister(entry);
+    }
+  }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
 
   return [
     query.data as Optimistic<TData>[] | undefined,
