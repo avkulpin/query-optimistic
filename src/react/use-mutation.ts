@@ -12,6 +12,7 @@ import { registry } from '../core/registry';
 import {
   channel as coreChannel,
   type Channel,
+  type ChannelOptions,
   type CollectionChannel,
   type EntityChannel,
 } from '../core/channel';
@@ -105,13 +106,15 @@ interface MutationTransaction {
   where?: (item: any) => boolean;
   update?: (item: any) => any;
   reconcile?: boolean;
+  scope?: Record<string, unknown>;
 }
 
 /** Internal collection channel for batched mutations */
 class BatchedCollectionChannel<TEntity> {
   constructor(
     private readonly target: CollectionDef<TEntity, any>,
-    private readonly transactions: MutationTransaction[]
+    private readonly transactions: MutationTransaction[],
+    private readonly options?: ChannelOptions
   ) {}
 
   prepend(data: TEntity, options?: { reconcile?: boolean }): this {
@@ -120,6 +123,7 @@ class BatchedCollectionChannel<TEntity> {
       action: 'prepend',
       data,
       reconcile: options?.reconcile,
+      scope: this.options?.scope,
     });
     return this;
   }
@@ -130,6 +134,7 @@ class BatchedCollectionChannel<TEntity> {
       action: 'append',
       data,
       reconcile: options?.reconcile,
+      scope: this.options?.scope,
     });
     return this;
   }
@@ -141,6 +146,7 @@ class BatchedCollectionChannel<TEntity> {
       id,
       update: updateFn,
       reconcile: options?.reconcile,
+      scope: this.options?.scope,
     });
     return this;
   }
@@ -150,6 +156,7 @@ class BatchedCollectionChannel<TEntity> {
       target: this.target,
       action: 'delete',
       id,
+      scope: this.options?.scope,
     });
     return this;
   }
@@ -185,19 +192,20 @@ class BatchedEntityChannel<TEntity> {
 
 /** Internal batched channel type */
 interface BatchedChannel {
-  <TEntity>(target: CollectionDef<TEntity, any>): BatchedCollectionChannel<TEntity>;
+  <TEntity>(target: CollectionDef<TEntity, any>, options?: ChannelOptions): BatchedCollectionChannel<TEntity>;
   <TEntity>(target: EntityDef<TEntity, any>): BatchedEntityChannel<TEntity>;
 }
 
 /** Creates a batched channel for collecting mutations */
 function createBatchedChannel(transactions: MutationTransaction[]): BatchedChannel {
-  function channel<TEntity>(target: CollectionDef<TEntity, any>): BatchedCollectionChannel<TEntity>;
+  function channel<TEntity>(target: CollectionDef<TEntity, any>, options?: ChannelOptions): BatchedCollectionChannel<TEntity>;
   function channel<TEntity>(target: EntityDef<TEntity, any>): BatchedEntityChannel<TEntity>;
   function channel<TEntity>(
-    target: CollectionDef<TEntity, any> | EntityDef<TEntity, any>
+    target: CollectionDef<TEntity, any> | EntityDef<TEntity, any>,
+    options?: ChannelOptions
   ): BatchedCollectionChannel<TEntity> | BatchedEntityChannel<TEntity> {
     if (target._type === 'collection') {
-      return new BatchedCollectionChannel(target, transactions);
+      return new BatchedCollectionChannel(target, transactions, options);
     } else {
       return new BatchedEntityChannel(target, transactions);
     }
@@ -272,7 +280,7 @@ export function useMutation<
         options.optimistic(channel, params);
 
         for (const tx of transactions) {
-          const { target, action, data, id, where, update } = tx;
+          const { target, action, data, id, where, update, scope } = tx;
 
           // Add optimistic metadata to data
           const optimisticData = data
@@ -291,7 +299,7 @@ export function useMutation<
               : optimisticData
                 ? (item: any) => ({ ...item, ...optimisticData })
                 : undefined,
-          });
+          }, scope);
 
           rollbacks.push(...updateRollbacks);
         }
