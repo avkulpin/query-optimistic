@@ -34,6 +34,7 @@ export type {
 export {
   useQuery,
   useMutation,
+  OptimisticQueryProvider,
 } from './react';
 
 export type {
@@ -43,4 +44,5 @@ export type {
   EntityResult,
   OptimisticConfig,
   UseMutationOptions,
+  OptimisticQueryProviderProps,
 } from './react';

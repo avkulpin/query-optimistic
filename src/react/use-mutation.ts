@@ -3,6 +3,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { nanoid } from 'nanoid';
+import { useOptimisticQueryContext } from './provider';
 import type {
   MutationDef,
   CollectionDef,
@@ -260,6 +261,7 @@ export function useMutation<
     optimistic?: (channel: BatchedChannel, params: TParams) => void;
   }
 ): UseMutationResult<TResponse, Error, TParams> {
+  const context = useOptimisticQueryContext();
   const mutation = useTanstackMutation<
     TResponse,
     Error,
@@ -327,10 +329,14 @@ export function useMutation<
       options?.onSuccess?.(data, params);
     },
 
-    onError: (error, params, context) => {
+    onError: (error, params, mutationContext) => {
       // Rollback all optimistic updates
-      context?.rollbacks.forEach((rollback) => rollback());
-      options?.onError?.(error, params);
+      mutationContext?.rollbacks.forEach((rollback) => rollback());
+      if (options?.onError) {
+        options.onError(error, params);
+      } else {
+        context.onError?.(error);
+      }
     },
   });
 

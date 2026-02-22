@@ -9,3 +9,6 @@ export type {
 
 export { useMutation } from './use-mutation';
 export type { OptimisticConfig, UseMutationOptions } from './use-mutation';
+
+export { OptimisticQueryProvider } from './provider';
+export type { OptimisticQueryProviderProps } from './provider';
