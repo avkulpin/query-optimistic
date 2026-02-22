@@ -40,10 +40,15 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   disableOptimistic?: boolean;
 }
 
+/** Adds ensureQueryData capability to a query result */
+export type WithEnsureData<TData> = {
+  ensureQueryData: (options?: { staleTime?: number }) => Promise<TData>;
+};
+
 /** Return type for collection queries: [data, queryResult] */
 export type QueryResult<T> = [
   Optimistic<T>[] | undefined,
-  UseQueryResult<T[], Error>
+  UseQueryResult<T[], Error> & WithEnsureData<T[]>
 ];
 
 /** Return type for paginated queries: [data, infiniteQueryResult] */
@@ -55,7 +60,7 @@ export type PaginatedQueryResult<T> = [
 /** Return type for entity queries: [data, queryResult] */
 export type EntityResult<T> = [
   Optimistic<T> | undefined,
-  UseQueryResult<T, Error>
+  UseQueryResult<T, Error> & WithEnsureData<T>
 ];
 
 /**
@@ -95,7 +100,7 @@ export function useQuery<TData, TParams>(
 export function useQuery<TData, TParams, TSelected>(
   def: CollectionDef<TData, TParams>,
   options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { select: (data: Optimistic<TData>[]) => TSelected }
-): [TSelected | undefined, UseQueryResult<TData[], Error>];
+): [TSelected | undefined, UseQueryResult<TData[], Error> & WithEnsureData<TData[]>];
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
@@ -105,7 +110,7 @@ export function useQuery<TData, TParams>(
 export function useQuery<TData, TParams, TSelected>(
   def: EntityDef<TData, TParams>,
   options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { select: (data: Optimistic<TData>) => TSelected }
-): [TSelected | undefined, UseQueryResult<TData, Error>];
+): [TSelected | undefined, UseQueryResult<TData, Error> & WithEnsureData<TData>];
 
 export function useQuery<TData, TParams>(
   def: EntityDef<TData, TParams>,
@@ -166,10 +171,19 @@ export function useQuery<TData, TParams>(
       }
     }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground, disableOptimistic]);
 
-    const data = query.data as Optimistic<TData> | undefined;
+    const ensuredQuery = Object.assign(query, {
+      ensureQueryData: (opts?: { staleTime?: number }) =>
+        queryClient.ensureQueryData<TData>({
+          queryKey,
+          queryFn: () => entityDef.fetch(params as TParams),
+          staleTime: opts?.staleTime ?? queryOptions.staleTime,
+        }),
+    });
+
+    const data = ensuredQuery.data as Optimistic<TData> | undefined;
     return [
       (data !== undefined && select ? select(data) : data) as any,
-      query as UseQueryResult<TData, Error>,
+      ensuredQuery,
     ];
   }
 
@@ -274,9 +288,18 @@ export function useQuery<TData, TParams>(
     }
   }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground, disableOptimistic]);
 
-  const data = query.data as Optimistic<TData>[] | undefined;
+  const ensuredQuery = Object.assign(query, {
+    ensureQueryData: (opts?: { staleTime?: number }) =>
+      queryClient.ensureQueryData<TData[]>({
+        queryKey,
+        queryFn: () => collectionDef.fetch(params as TParams),
+        staleTime: opts?.staleTime ?? queryOptions.staleTime,
+      }),
+  });
+
+  const data = ensuredQuery.data as Optimistic<TData>[] | undefined;
   return [
     (data !== undefined && select ? select(data) : data) as any,
-    query as UseQueryResult<TData[], Error>,
+    ensuredQuery,
   ];
 }

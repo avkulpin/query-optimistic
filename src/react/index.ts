@@ -5,6 +5,7 @@ export type {
   QueryResult,
   PaginatedQueryResult,
   EntityResult,
+  WithEnsureData,
 } from './use-query';
 
 export { useQueries } from './use-queries';
