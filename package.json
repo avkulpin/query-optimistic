@@ -1,6 +1,6 @@
 {
   "name": "query-optimistic",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Simple, type-safe data fetching and optimistic updates for React with TanStack Query",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

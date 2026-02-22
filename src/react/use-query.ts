@@ -26,6 +26,8 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
+  /** Transform the query data. Useful for deriving different views from the same cache. */
+  select?: (data: Optimistic<TData>[] | Optimistic<TData>) => unknown;
   /**
    * Keep this query registered for optimistic updates even when unmounted.
    * Useful when you want updates from other pages to sync to this query's cache.
@@ -107,7 +109,7 @@ export function useQuery<TData, TParams>(
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams> | EntityDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams, TData> & { select?: (data: any) => any }
+  options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
   const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
@@ -161,7 +163,7 @@ export function useQuery<TData, TParams>(
 
     const data = query.data as Optimistic<TData> | undefined;
     return [
-      data !== undefined && select ? select(data) : data,
+      (data !== undefined && select ? select(data) : data) as any,
       query as UseQueryResult<TData, Error>,
     ];
   }
@@ -228,7 +230,7 @@ export function useQuery<TData, TParams>(
     }, [def.name, queryKey, infiniteQuery.status, infiniteQuery.data, queryClient, syncInBackground]);
 
     return [
-      flatData,
+      flatData as any,
       infiniteQuery as UseInfiniteQueryResult<{ pages: TData[][]; pageParams: unknown[] }, Error>,
     ];
   }
@@ -269,7 +271,7 @@ export function useQuery<TData, TParams>(
 
   const data = query.data as Optimistic<TData>[] | undefined;
   return [
-    data !== undefined && select ? select(data) : data,
+    (data !== undefined && select ? select(data) : data) as any,
     query as UseQueryResult<TData[], Error>,
   ];
 }
