@@ -26,6 +26,8 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
+  /** Transform the query data. Useful for deriving different views from the same cache. */
+  select?: (data: Optimistic<TData>[] | Optimistic<TData>) => unknown;
   /**
    * Keep this query registered for optimistic updates even when unmounted.
    * Useful when you want updates from other pages to sync to this query's cache.
