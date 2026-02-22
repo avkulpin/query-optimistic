@@ -15,7 +15,7 @@ import type {
 import { registry } from '../core/registry';
 
 /** Options for useQuery hook */
-export interface UseQueryHookOptions<TParams> extends QueryOptions {
+export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOptions {
   /** Parameters to pass to the fetch function */
   params?: TParams;
   /** Enable pagination mode (infinite query) */
@@ -23,7 +23,7 @@ export interface UseQueryHookOptions<TParams> extends QueryOptions {
   /** For paginated: get params for each page */
   getPageParams?: (context: { pageParam: number }) => TParams;
   /** For paginated: custom logic to determine the next page param. Return undefined to stop. */
-  getNextPageParam?: (lastPage: unknown[], allPages: unknown[][]) => number | undefined;
+  getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
   /**
@@ -77,22 +77,22 @@ export type EntityResult<T> = [
  */
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
-  options: UseQueryHookOptions<TParams> & { paginated: true }
+  options: UseQueryHookOptions<TParams, TData> & { paginated: true }
 ): PaginatedQueryResult<TData>;
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams>
+  options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData>;
 
 export function useQuery<TData, TParams>(
   def: EntityDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams>
+  options?: UseQueryHookOptions<TParams, TData>
 ): EntityResult<TData>;
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams> | EntityDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams>
+  options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
   const { params, paginated, getPageParams, getNextPageParam, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
