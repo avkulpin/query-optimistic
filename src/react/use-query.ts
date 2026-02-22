@@ -77,7 +77,7 @@ export type EntityResult<T> = [
  */
 export function useQuery<TData, TParams, TSelected>(
   def: CollectionDef<TData, TParams>,
-  options: UseQueryHookOptions<TParams, TData> & { paginated: true; select: (data: Optimistic<TData>[]) => TSelected }
+  options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { paginated: true; select: (data: Optimistic<TData>[]) => TSelected }
 ): [TSelected | undefined, UseInfiniteQueryResult<{ pages: TData[][]; pageParams: unknown[] }, Error>];
 
 export function useQuery<TData, TParams>(
@@ -87,7 +87,7 @@ export function useQuery<TData, TParams>(
 
 export function useQuery<TData, TParams, TSelected>(
   def: CollectionDef<TData, TParams>,
-  options: UseQueryHookOptions<TParams, TData> & { select: (data: Optimistic<TData>[]) => TSelected }
+  options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { select: (data: Optimistic<TData>[]) => TSelected }
 ): [TSelected | undefined, UseQueryResult<TData[], Error>];
 
 export function useQuery<TData, TParams>(
@@ -97,7 +97,7 @@ export function useQuery<TData, TParams>(
 
 export function useQuery<TData, TParams, TSelected>(
   def: EntityDef<TData, TParams>,
-  options: UseQueryHookOptions<TParams, TData> & { select: (data: Optimistic<TData>) => TSelected }
+  options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { select: (data: Optimistic<TData>) => TSelected }
 ): [TSelected | undefined, UseQueryResult<TData, Error>];
 
 export function useQuery<TData, TParams>(
