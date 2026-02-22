@@ -26,8 +26,6 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
-  /** Transform the query data. Useful for deriving different views from the same cache. */
-  select?: (data: any) => any;
   /**
    * Keep this query registered for optimistic updates even when unmounted.
    * Useful when you want updates from other pages to sync to this query's cache.
@@ -109,7 +107,7 @@ export function useQuery<TData, TParams>(
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams> | EntityDef<TData, TParams>,
-  options?: UseQueryHookOptions<TParams, TData>
+  options?: UseQueryHookOptions<TParams, TData> & { select?: (data: any) => any }
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
   const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
