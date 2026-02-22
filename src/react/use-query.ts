@@ -22,6 +22,8 @@ export interface UseQueryHookOptions<TParams> extends QueryOptions {
   paginated?: boolean;
   /** For paginated: get params for each page */
   getPageParams?: (context: { pageParam: number }) => TParams;
+  /** For paginated: custom logic to determine the next page param. Return undefined to stop. */
+  getNextPageParam?: (lastPage: unknown[], allPages: unknown[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
   /**
@@ -93,7 +95,7 @@ export function useQuery<TData, TParams>(
   options?: UseQueryHookOptions<TParams>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
-  const { params, paginated, getPageParams, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
+  const { params, paginated, getPageParams, getNextPageParam, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
 
   // Set queryClient on registry for direct cache access
   registry.setQueryClient(queryClient);
@@ -161,8 +163,9 @@ export function useQuery<TData, TParams>(
         return collectionDef.fetch(pageParams);
       },
       initialPageParam: 1,
-      getNextPageParam: (lastPage, allPages) =>
-        lastPage.length > 0 ? allPages.length + 1 : undefined,
+      getNextPageParam: getNextPageParam
+        ?? ((lastPage, allPages) =>
+          lastPage.length > 0 ? allPages.length + 1 : undefined),
       enabled: queryOptions.enabled,
       staleTime: queryOptions.staleTime,
       gcTime: queryOptions.cacheTime,
