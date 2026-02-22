@@ -33,6 +33,7 @@ export type {
 // React exports
 export {
   useQuery,
+  useQueries,
   useMutation,
   OptimisticQueryProvider,
 } from './react';

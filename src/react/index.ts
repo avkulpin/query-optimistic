@@ -7,6 +7,8 @@ export type {
   EntityResult,
 } from './use-query';
 
+export { useQueries } from './use-queries';
+
 export { useMutation } from './use-mutation';
 export type { OptimisticConfig, UseMutationOptions } from './use-mutation';
 
