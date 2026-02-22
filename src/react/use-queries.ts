@@ -69,7 +69,7 @@ export function useQueries<TData, TParams>(
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      if (result.status !== 'success' || !result.data) continue;
+      if (optionsArray[i]?.disableOptimistic || result.status !== 'success' || !result.data) continue;
 
       const queryKey = queries[i].queryKey;
 
@@ -116,7 +116,7 @@ export function useQueries<TData, TParams>(
       }
       registeredRef.current = new Set();
     };
-  }, [def, results, queries, queryClient]);
+  }, [def, results, queries, queryClient, optionsArray]);
 
   // Map to tuples
   return results.map((result) => {

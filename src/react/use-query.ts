@@ -33,6 +33,11 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
    * Useful when you want updates from other pages to sync to this query's cache.
    */
   syncInBackground?: boolean;
+  /**
+   * Disable optimistic update registration for this query.
+   * Useful for queries that don't need optimistic updates (e.g. analytics, logs).
+   */
+  disableOptimistic?: boolean;
 }
 
 /** Return type for collection queries: [data, queryResult] */
@@ -112,7 +117,7 @@ export function useQuery<TData, TParams>(
   options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
-  const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
+  const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, disableOptimistic, ...queryOptions } = options ?? {};
 
   // Set queryClient on registry for direct cache access
   registry.setQueryClient(queryClient);
@@ -139,7 +144,7 @@ export function useQuery<TData, TParams>(
 
     // Register for optimistic updates
     useEffect(() => {
-      if (query.status !== 'success' || !query.data) {
+      if (disableOptimistic || query.status !== 'success' || !query.data) {
         return;
       }
 
@@ -159,7 +164,7 @@ export function useQuery<TData, TParams>(
       if (!syncInBackground) {
         return () => registry.unregister(entry);
       }
-    }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
+    }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground, disableOptimistic]);
 
     const data = query.data as Optimistic<TData> | undefined;
     return [
@@ -199,7 +204,7 @@ export function useQuery<TData, TParams>(
 
     // Register for optimistic updates
     useEffect(() => {
-      if (infiniteQuery.status !== 'success' || !infiniteQuery.data) return;
+      if (disableOptimistic || infiniteQuery.status !== 'success' || !infiniteQuery.data) return;
 
       const entry = {
         kind: 'paginated' as const,
@@ -227,7 +232,7 @@ export function useQuery<TData, TParams>(
       if (!syncInBackground) {
         return () => registry.unregister(entry);
       }
-    }, [def.name, queryKey, infiniteQuery.status, infiniteQuery.data, queryClient, syncInBackground]);
+    }, [def.name, queryKey, infiniteQuery.status, infiniteQuery.data, queryClient, syncInBackground, disableOptimistic]);
 
     return [
       flatData as any,
@@ -249,7 +254,7 @@ export function useQuery<TData, TParams>(
 
   // Register for optimistic updates
   useEffect(() => {
-    if (query.status !== 'success' || !query.data) return;
+    if (disableOptimistic || query.status !== 'success' || !query.data) return;
 
     const entry = {
       kind: 'collection' as const,
@@ -267,7 +272,7 @@ export function useQuery<TData, TParams>(
     if (!syncInBackground) {
       return () => registry.unregister(entry);
     }
-  }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
+  }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground, disableOptimistic]);
 
   const data = query.data as Optimistic<TData>[] | undefined;
   return [
