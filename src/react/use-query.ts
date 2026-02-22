@@ -26,6 +26,8 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
+  /** Transform the query data. Useful for deriving different views from the same cache. */
+  select?: (data: any) => any;
   /**
    * Keep this query registered for optimistic updates even when unmounted.
    * Useful when you want updates from other pages to sync to this query's cache.
@@ -75,15 +77,30 @@ export type EntityResult<T> = [
  * // Entity query
  * const [user, query] = useQuery(userEntity, { params: userId })
  */
+export function useQuery<TData, TParams, TSelected>(
+  def: CollectionDef<TData, TParams>,
+  options: UseQueryHookOptions<TParams, TData> & { paginated: true; select: (data: Optimistic<TData>[]) => TSelected }
+): [TSelected | undefined, UseInfiniteQueryResult<{ pages: TData[][]; pageParams: unknown[] }, Error>];
+
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
   options: UseQueryHookOptions<TParams, TData> & { paginated: true }
 ): PaginatedQueryResult<TData>;
 
+export function useQuery<TData, TParams, TSelected>(
+  def: CollectionDef<TData, TParams>,
+  options: UseQueryHookOptions<TParams, TData> & { select: (data: Optimistic<TData>[]) => TSelected }
+): [TSelected | undefined, UseQueryResult<TData[], Error>];
+
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
   options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData>;
+
+export function useQuery<TData, TParams, TSelected>(
+  def: EntityDef<TData, TParams>,
+  options: UseQueryHookOptions<TParams, TData> & { select: (data: Optimistic<TData>) => TSelected }
+): [TSelected | undefined, UseQueryResult<TData, Error>];
 
 export function useQuery<TData, TParams>(
   def: EntityDef<TData, TParams>,
@@ -95,7 +112,7 @@ export function useQuery<TData, TParams>(
   options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
-  const { params, paginated, getPageParams, getNextPageParam, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
+  const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, ...queryOptions } = options ?? {};
 
   // Set queryClient on registry for direct cache access
   registry.setQueryClient(queryClient);
@@ -144,8 +161,9 @@ export function useQuery<TData, TParams>(
       }
     }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
 
+    const data = query.data as Optimistic<TData> | undefined;
     return [
-      query.data as Optimistic<TData> | undefined,
+      data !== undefined && select ? select(data) : data,
       query as UseQueryResult<TData, Error>,
     ];
   }
@@ -174,10 +192,10 @@ export function useQuery<TData, TParams>(
       refetchInterval: queryOptions.refetchInterval,
     });
 
-    const flatData = useMemo(
-      () => infiniteQuery.data?.pages.flat() as Optimistic<TData>[] | undefined,
-      [infiniteQuery.data]
-    );
+    const flatData = useMemo(() => {
+      const flat = infiniteQuery.data?.pages.flat() as Optimistic<TData>[] | undefined;
+      return flat !== undefined && select ? select(flat) : flat;
+    }, [infiniteQuery.data]);
 
     // Register for optimistic updates
     useEffect(() => {
@@ -251,8 +269,9 @@ export function useQuery<TData, TParams>(
     }
   }, [def.name, queryKey, query.status, query.data, queryClient, syncInBackground]);
 
+  const data = query.data as Optimistic<TData>[] | undefined;
   return [
-    query.data as Optimistic<TData>[] | undefined,
+    data !== undefined && select ? select(data) : data,
     query as UseQueryResult<TData[], Error>,
   ];
 }
