@@ -129,7 +129,10 @@ export class CollectionChannel<TEntity> {
 
 /** Channel for an entity - provides typed optimistic mutation methods */
 export class EntityChannel<TEntity> {
-  constructor(private readonly target: EntityDef<TEntity, any>) {}
+  constructor(
+    private readonly target: EntityDef<TEntity, any>,
+    private readonly options?: ChannelOptions
+  ) {}
 
   /**
    * Update the entity
@@ -138,7 +141,7 @@ export class EntityChannel<TEntity> {
   update(updateFn: (item: TEntity) => TEntity, options?: { sync?: boolean }): () => void {
     const rollbacks = registry.applyUpdate(this.target.name, 'update', {
       update: updateFn,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -150,7 +153,7 @@ export class EntityChannel<TEntity> {
   replace(data: TEntity, options?: { sync?: boolean }): () => void {
     const rollbacks = registry.applyUpdate(this.target.name, 'replace', {
       data: data as any,
-    });
+    }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
   }
@@ -177,7 +180,7 @@ export class EntityChannel<TEntity> {
  */
 export interface Channel {
   <TEntity>(target: CollectionDef<TEntity, any>, options?: ChannelOptions): CollectionChannel<TEntity>;
-  <TEntity>(target: EntityDef<TEntity, any>): EntityChannel<TEntity>;
+  <TEntity>(target: EntityDef<TEntity, any>, options?: ChannelOptions): EntityChannel<TEntity>;
 }
 
 /**
@@ -203,6 +206,6 @@ export const channel: Channel = (<TEntity>(
   if (target._type === 'collection') {
     return new CollectionChannel(target, options);
   } else {
-    return new EntityChannel(target);
+    return new EntityChannel(target, options);
   }
 }) as Channel;

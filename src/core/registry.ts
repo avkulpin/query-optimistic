@@ -188,13 +188,11 @@ class QueryRegistry {
   ): (() => void)[] {
     if (!this.queryClient) return [];
 
-    const def = this.collectionDefs.get(name);
-    if (!def) return [];
-
+    const collectionDef = this.collectionDefs.get(name);
     const rollbacks: (() => void)[] = [];
 
     // Get all queries with this name from the cache
-    const queries = this.queryClient.getQueriesData<T[] | { pages: T[][]; pageParams: unknown[] }>({
+    const queries = this.queryClient.getQueriesData<any>({
       queryKey: [name],
     });
 
@@ -205,34 +203,47 @@ class QueryRegistry {
       const params = queryKey[1] as Record<string, unknown> | undefined;
       if (!this.matchesScope(params, scope)) continue;
 
-      // Check if this is a paginated query
-      const isPaginated = data && typeof data === 'object' && 'pages' in data;
+      if (collectionDef) {
+        // Check if this is a paginated query
+        const isPaginated = data && typeof data === 'object' && 'pages' in data;
 
-      if (isPaginated) {
-        const paginatedData = data as { pages: T[][]; pageParams: unknown[] };
-        const previous = paginatedData;
-        rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
+        if (isPaginated) {
+          const paginatedData = data as { pages: T[][]; pageParams: unknown[] };
+          const previous = paginatedData;
+          rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
 
-        this.queryClient.setQueryData<{ pages: T[][]; pageParams: unknown[] }>(queryKey, (prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            pages: prev.pages.map((page, i) =>
-              i === 0
-                ? this.applyCollectionUpdate(page, action, payload, def.id)
-                : page
-            ),
-          };
-        });
+          this.queryClient.setQueryData<{ pages: T[][]; pageParams: unknown[] }>(queryKey, (prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              pages: prev.pages.map((page, i) =>
+                i === 0
+                  ? this.applyCollectionUpdate(page, action, payload, collectionDef.id)
+                  : page
+              ),
+            };
+          });
+        } else {
+          const previous = data as T[];
+          rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
+
+          this.queryClient.setQueryData<T[]>(queryKey, (prev) => {
+            if (!prev) return prev;
+            return this.applyCollectionUpdate(prev, action, payload, collectionDef.id);
+          });
+        }
       } else {
-        const arrayData = data as T[];
-        const previous = arrayData;
+        // Entity: apply update/replace directly
+        const previous = data as T;
         rollbacks.push(() => this.queryClient!.setQueryData(queryKey, previous));
 
-        this.queryClient.setQueryData<T[]>(queryKey, (prev) => {
-          if (!prev) return prev;
-          return this.applyCollectionUpdate(prev, action, payload, def.id);
-        });
+        if (action === 'update' && payload.update) {
+          this.queryClient.setQueryData<T>(queryKey, (prev) =>
+            prev ? payload.update!(prev) : prev
+          );
+        } else if (action === 'replace' && payload.data) {
+          this.queryClient.setQueryData(queryKey, payload.data);
+        }
       }
     }
 
