@@ -107,12 +107,12 @@ export type EntityResult<T> = [
  */
 export function useQuery<TData, TParams, TSelected>(
   def: CollectionDef<TData, TParams>,
-  options: Omit<UseQueryHookOptions<TParams, TData>, 'select'> & { paginated: true; select: (data: Optimistic<TData>[]) => TSelected }
+  options: Omit<UseQueryHookOptions<TParams, TData>, 'select' | 'params'> & { paginated: true; params?: Partial<TParams>; select: (data: Optimistic<TData>[]) => TSelected }
 ): [TSelected | undefined, UseInfiniteQueryResult<{ pages: TData[][]; pageParams: unknown[] }, Error>];
 
 export function useQuery<TData, TParams>(
   def: CollectionDef<TData, TParams>,
-  options: UseQueryHookOptions<TParams, TData> & { paginated: true }
+  options: Omit<UseQueryHookOptions<TParams, TData>, 'params'> & { paginated: true; params?: Partial<TParams> }
 ): PaginatedQueryResult<TData>;
 
 export function useQuery<TData, TParams, TSelected>(
@@ -219,7 +219,7 @@ export function useQuery<TData, TParams>(
       queryFn: ({ pageParam }) => {
         const pageParams = getPageParams
           ? getPageParams({ pageParam: pageParam as number })
-          : ({ pageParam } as TParams);
+          : ({ ...stableParams, pageParam } as TParams);
         return collectionDef.fetch(pageParams);
       },
       initialPageParam: 1,
