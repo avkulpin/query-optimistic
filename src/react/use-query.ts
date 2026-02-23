@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   useQuery as useTanstackQuery,
   useInfiniteQuery,
@@ -13,6 +13,24 @@ import type {
   QueryOptions,
 } from '../core/types';
 import { registry } from '../core/registry';
+
+/**
+ * Returns a referentially stable version of `value`.
+ * Only updates the reference when the JSON-serialized form changes.
+ * Prevents unnecessary queryKey recalculations from inline objects.
+ */
+function useStableValue<T>(value: T): T {
+  const serializedRef = useRef<string>();
+  const valueRef = useRef(value);
+
+  const serialized = JSON.stringify(value);
+  if (serializedRef.current !== serialized) {
+    serializedRef.current = serialized;
+    valueRef.current = value;
+  }
+
+  return valueRef.current;
+}
 
 /** Options for useQuery hook */
 export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOptions {
@@ -127,10 +145,14 @@ export function useQuery<TData, TParams>(
   // Set queryClient on registry for direct cache access
   registry.setQueryClient(queryClient);
 
+  // Stabilize params and customQueryKey to prevent unnecessary queryKey recalculations
+  const stableParams = useStableValue(params);
+  const stableCustomQueryKey = useStableValue(customQueryKey);
+
   // Build query key
   const queryKey = useMemo(
-    () => customQueryKey ?? [def.name, params].filter(Boolean),
-    [customQueryKey, def.name, params]
+    () => stableCustomQueryKey ?? [def.name, stableParams].filter(Boolean),
+    [stableCustomQueryKey, def.name, stableParams]
   );
 
   // Entity query
@@ -138,10 +160,11 @@ export function useQuery<TData, TParams>(
     const entityDef = def as EntityDef<TData, TParams>;
     const query = useTanstackQuery({
       queryKey,
-      queryFn: () => entityDef.fetch(params as TParams),
+      queryFn: () => entityDef.fetch(stableParams as TParams),
       enabled: queryOptions.enabled,
       staleTime: queryOptions.staleTime,
       gcTime: queryOptions.cacheTime,
+      placeholderData: queryOptions.placeholderData as any,
       refetchOnMount: queryOptions.refetchOnMount,
       refetchOnWindowFocus: queryOptions.refetchOnWindowFocus,
       refetchInterval: queryOptions.refetchInterval,
@@ -175,7 +198,7 @@ export function useQuery<TData, TParams>(
       ensureQueryData: (opts?: { staleTime?: number }) =>
         queryClient.ensureQueryData<TData>({
           queryKey,
-          queryFn: () => entityDef.fetch(params as TParams),
+          queryFn: () => entityDef.fetch(stableParams as TParams),
           staleTime: opts?.staleTime ?? queryOptions.staleTime,
         }),
     });
@@ -257,10 +280,11 @@ export function useQuery<TData, TParams>(
   // Simple collection query
   const query = useTanstackQuery({
     queryKey,
-    queryFn: () => collectionDef.fetch(params as TParams),
+    queryFn: () => collectionDef.fetch(stableParams as TParams),
     enabled: queryOptions.enabled,
     staleTime: queryOptions.staleTime,
     gcTime: queryOptions.cacheTime,
+    placeholderData: queryOptions.placeholderData as any,
     refetchOnMount: queryOptions.refetchOnMount,
     refetchOnWindowFocus: queryOptions.refetchOnWindowFocus,
     refetchInterval: queryOptions.refetchInterval,
@@ -292,7 +316,7 @@ export function useQuery<TData, TParams>(
     ensureQueryData: (opts?: { staleTime?: number }) =>
       queryClient.ensureQueryData<TData[]>({
         queryKey,
-        queryFn: () => collectionDef.fetch(params as TParams),
+        queryFn: () => collectionDef.fetch(stableParams as TParams),
         staleTime: opts?.staleTime ?? queryOptions.staleTime,
       }),
   });

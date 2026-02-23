@@ -66,6 +66,7 @@ export interface QueryOptions {
   enabled?: boolean;
   staleTime?: number;
   cacheTime?: number;
+  placeholderData?: unknown | ((previousData: unknown, previousQuery: unknown) => unknown);
   refetchOnMount?: boolean;
   refetchOnWindowFocus?: boolean;
   refetchInterval?: number | false;
