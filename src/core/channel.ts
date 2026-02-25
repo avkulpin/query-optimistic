@@ -40,13 +40,12 @@ export class CollectionChannel<TEntity> {
    * @returns Rollback function to undo the change
    */
   prepend(data: TEntity, options?: { sync?: boolean }): () => void {
-    const optimisticData = {
-      ...data,
-      _optimistic: { id: this.optimisticId, status: 'pending' as const },
-    };
+    const payload = options?.sync
+      ? data
+      : { ...data, _optimistic: { id: this.optimisticId, status: 'pending' as const } };
 
     const rollbacks = registry.applyUpdate(this.target.name, 'prepend', {
-      data: optimisticData,
+      data: payload,
     }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());
@@ -57,13 +56,12 @@ export class CollectionChannel<TEntity> {
    * @returns Rollback function to undo the change
    */
   append(data: TEntity, options?: { sync?: boolean }): () => void {
-    const optimisticData = {
-      ...data,
-      _optimistic: { id: this.optimisticId, status: 'pending' as const },
-    };
+    const payload = options?.sync
+      ? data
+      : { ...data, _optimistic: { id: this.optimisticId, status: 'pending' as const } };
 
     const rollbacks = registry.applyUpdate(this.target.name, 'append', {
-      data: optimisticData,
+      data: payload,
     }, this.options?.scope);
 
     return () => rollbacks.forEach((rb) => rb());

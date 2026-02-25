@@ -105,7 +105,7 @@ class QueryRegistry {
     name: string,
     action: 'prepend' | 'append' | 'update' | 'delete' | 'replace',
     payload: {
-      data?: Partial<Optimistic<T>>;
+      data?: T | Partial<Optimistic<T>>;
       id?: string;
       where?: (item: T) => boolean;
       update?: (item: T) => T;
@@ -179,7 +179,7 @@ class QueryRegistry {
     name: string,
     action: 'prepend' | 'append' | 'update' | 'delete' | 'replace',
     payload: {
-      data?: Partial<Optimistic<T>>;
+      data?: T | Partial<Optimistic<T>>;
       id?: string;
       where?: (item: T) => boolean;
       update?: (item: T) => T;
@@ -254,7 +254,7 @@ class QueryRegistry {
     items: T[],
     action: string,
     payload: {
-      data?: Partial<Optimistic<T>>;
+      data?: T | Partial<Optimistic<T>>;
       id?: string;
       where?: (item: T) => boolean;
       update?: (item: T) => T;
