@@ -42,6 +42,8 @@ export interface UseQueryHookOptions<TParams, TData = unknown> extends QueryOpti
   getPageParams?: (context: { pageParam: number }) => TParams;
   /** For paginated: custom logic to determine the next page param. Return undefined to stop. */
   getNextPageParam?: (lastPage: TData[], allPages: TData[][]) => number | undefined;
+  /** Prefix segments prepended to the query key (e.g. ["user"] → ["user", "wallets", params]) */
+  prefixQueryKey?: readonly unknown[];
   /** Custom query key (defaults to [def.name, params]) */
   queryKey?: readonly unknown[];
   /** Transform the query data. Useful for deriving different views from the same cache. */
@@ -140,19 +142,20 @@ export function useQuery<TData, TParams>(
   options?: UseQueryHookOptions<TParams, TData>
 ): QueryResult<TData> | PaginatedQueryResult<TData> | EntityResult<TData> {
   const queryClient = useQueryClient();
-  const { params, paginated, getPageParams, getNextPageParam, select, queryKey: customQueryKey, syncInBackground, disableOptimistic, ...queryOptions } = options ?? {};
+  const { params, paginated, getPageParams, getNextPageParam, select, prefixQueryKey, queryKey: customQueryKey, syncInBackground, disableOptimistic, ...queryOptions } = options ?? {};
 
   // Set queryClient on registry for direct cache access
   registry.setQueryClient(queryClient);
 
-  // Stabilize params and customQueryKey to prevent unnecessary queryKey recalculations
+  // Stabilize params, customQueryKey, and prefixQueryKey to prevent unnecessary queryKey recalculations
   const stableParams = useStableValue(params);
   const stableCustomQueryKey = useStableValue(customQueryKey);
+  const stablePrefixQueryKey = useStableValue(prefixQueryKey);
 
   // Build query key
   const queryKey = useMemo(
-    () => stableCustomQueryKey ?? [def.name, stableParams].filter(Boolean),
-    [stableCustomQueryKey, def.name, stableParams]
+    () => stableCustomQueryKey ?? [...(stablePrefixQueryKey ?? []), def.name, stableParams].filter(Boolean),
+    [stableCustomQueryKey, stablePrefixQueryKey, def.name, stableParams]
   );
 
   // Entity query

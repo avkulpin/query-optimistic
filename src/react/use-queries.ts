@@ -42,8 +42,8 @@ export function useQueries<TData, TParams>(
   const queries = useMemo(
     () =>
       optionsArray.map((opts) => {
-        const { params, queryKey: customQueryKey, ...queryOptions } = opts;
-        const queryKey = customQueryKey ?? [def.name, params].filter(Boolean);
+        const { params, prefixQueryKey, queryKey: customQueryKey, ...queryOptions } = opts;
+        const queryKey = customQueryKey ?? [...(prefixQueryKey ?? []), def.name, params].filter(Boolean);
 
         return {
           queryKey,

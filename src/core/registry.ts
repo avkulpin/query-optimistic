@@ -89,6 +89,19 @@ class QueryRegistry {
   }
 
   /**
+   * Extract params from a queryKey.
+   * Params are always the last element if it's a plain object (not an array).
+   * Supports both standard keys [name, params] and prefixed keys [...prefix, name, params].
+   */
+  private extractParams(queryKey: readonly unknown[]): Record<string, unknown> | undefined {
+    const last = queryKey[queryKey.length - 1];
+    if (last && typeof last === 'object' && !Array.isArray(last)) {
+      return last as Record<string, unknown>;
+    }
+    return undefined;
+  }
+
+  /**
    * Check if params partially match the given scope object.
    * Returns true if all key-value pairs in scope exist in params.
    */
@@ -128,7 +141,7 @@ class QueryRegistry {
       if (seenKeys.has(key)) return false;
       seenKeys.add(key);
       // Also filter by scope if provided
-      const params = entry.queryKey[1] as Record<string, unknown> | undefined;
+      const params = this.extractParams(entry.queryKey);
       return this.matchesScope(params, scope);
     });
 
@@ -192,15 +205,16 @@ class QueryRegistry {
     const rollbacks: (() => void)[] = [];
 
     // Get all queries with this name from the cache
+    // Use predicate to support both standard [name, params] and prefixed [...prefix, name, params] keys
     const queries = this.queryClient.getQueriesData<any>({
-      queryKey: [name],
+      predicate: (query) => query.queryKey.includes(name),
     });
 
     for (const [queryKey, data] of queries) {
       if (!data) continue;
 
-      // Extract params from queryKey [name, params]
-      const params = queryKey[1] as Record<string, unknown> | undefined;
+      // Extract params from queryKey (last element if it's an object)
+      const params = this.extractParams(queryKey);
       if (!this.matchesScope(params, scope)) continue;
 
       if (collectionDef) {
